@@ -11,7 +11,7 @@ class DataApp:
     def run(self) -> None:
         while True:
             print("\n" + "=" * 60)
-            print("DATA REPOSITORY APP")
+            print("Data Analysis App")
             print("=" * 60)
             print("1. Load a file")
             print("2. List loaded datasets")

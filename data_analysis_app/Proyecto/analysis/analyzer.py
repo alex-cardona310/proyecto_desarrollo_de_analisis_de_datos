@@ -16,9 +16,12 @@ class Analyzer:
 
     def SummaryStatistics(self):
         if self.df is None:
-            raise ValueError("No DataFrame was provided to Analyzer.")
+            return "No dataset loaded."
 
         numeric_df = self.df.select_dtypes(include=["number"])
+
+        if numeric_df.empty:
+            return "This dataset has no numeric columns for EDA."
 
         summary = pd.DataFrame({
             "mean": numeric_df.mean(),
@@ -30,10 +33,3 @@ class Analyzer:
         })
 
         return summary.round(2)
-
-    def CorrelationMatrix(self):
-        if self.df is None:
-            raise ValueError("No DataFrame was provided to Analyzer.")
-
-        numeric_df = self.df.select_dtypes(include=["number"])
-        return numeric_df.corr().round(2)

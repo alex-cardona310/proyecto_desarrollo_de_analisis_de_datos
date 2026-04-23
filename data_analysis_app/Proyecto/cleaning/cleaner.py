@@ -16,3 +16,12 @@ class Cleaner:
 
     def _validateRules(self):
         pass
+
+    def eliminar_duplicados(df):
+        return df.drop_duplicates()
+    
+    def eliminar_filas_nulas(df):
+        return df.dropna().reset_index(drop=True)
+    
+    
+    

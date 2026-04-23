@@ -1,5 +1,6 @@
 import pandas as pd
 import sqlite3
+import os
 
 
 class Analyzer:
@@ -63,15 +64,19 @@ class DataApp:
                 self.view_dataset_info()
 
             elif option == "3":
-                self.run_eda()
+                self.show_menu2()
+                option = input("Choose an option: ").strip()
 
             elif option == "4":
-                self.show_sql_tables()
+                self.run_eda()
 
             elif option == "5":
-                self.load_another_source()
+                self.show_sql_tables()
 
             elif option == "6":
+                self.load_another_source()
+
+            elif option == "7":
                 print("Exiting program...")
                 if self.connection:
                     self.connection.close()
@@ -79,6 +84,8 @@ class DataApp:
 
             else:
                 print("Invalid option. Try again.")
+            
+            self.pause_and_clear()
 
     def load_source_at_start(self):
         print("\nChoose the type of data source:")
@@ -172,10 +179,30 @@ class DataApp:
         print("=" * 60)
         print("1. Preview dataset")
         print("2. View dataset information")
-        print("3. Exploratory Data Analysis")
-        print("4. Visualize SQL tables")
-        print("5. Load another data source")
-        print("6. Exit")
+        print("3. Data cleaning")
+        print("4. Exploratory Data Analysis")
+        print("5. Visualize SQL tables")
+        print("6. Load another data source")
+        print("7. Exit")
+
+    def pause_and_clear(self):
+        input("\nPress Enter to continue...")
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def show_menu2(self):
+        print("≽^-⩊-^≼ + Data cleaning + ≽^-⩊-^≼")
+        print("=" * 60)
+        print("1. Remove duplicates")
+        print("2. Remove rows with nulls")
+        print("3. Fill empty spaces")
+        print("4. Convert data types")
+        print("5. Remove outliers")
+        print("6. Validate data range")
+        print("7. Normalize")
+        print("7. Save changes")
+        print("8. Go back to main menu")
+
+    
 
     def preview_dataset(self):
         if self.dataset is None:

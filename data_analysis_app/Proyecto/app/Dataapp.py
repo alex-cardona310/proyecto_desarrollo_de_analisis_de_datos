@@ -37,6 +37,27 @@ class DataApp:
             elif option == "6":
                 self.load_another_source()
             elif option == "7":
+                from visualization.plotter import Plotter
+                plotter = Plotter()
+                columna = input("Columna para distribución: ").strip()
+                plotter.plot_distribution(self.dataset, columna)
+                x = input("Columna X para tendencia: ").strip()
+                y = input("Columna Y para tendencia: ").strip()
+                plotter.plot_trends(self.dataset, x, y)
+            elif option == "8":
+                from analysis.analyzer import Analyzer
+                analyzer = Analyzer(self.dataset)
+                corr = analyzer.calculate_correlations()
+                if corr is not None:
+                    print("\nMatriz de correlaciones:")
+                    print(corr)
+                    from visualization.visualizer import Visualizer
+                    visualizer = Visualizer()
+                    visualizer.visualize_correlation_heatmap(self.dataset)
+            elif option == "9":
+                print("Load another source")
+                self.load_source_at_start()
+            elif option == "10":
                 print("Exiting program...")
                 if self.connection:
                     self.connection.close()
@@ -112,7 +133,10 @@ class DataApp:
         print("4. Exploratory Data Analysis")
         print("5. Visualize SQL tables")
         print("6. Load another data source")
-        print("7. Exit")
+        print("7. Visualizar tendencias/distribuciones")
+        print("8. Mostrar correlaciones")
+        print("9. Load another source")
+        print("10. Exit")
 
     def pause_and_clear(self):
         input("\nPress Enter to continue...")

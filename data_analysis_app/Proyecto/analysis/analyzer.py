@@ -33,3 +33,15 @@ class Analyzer:
         })
 
         return summary.round(2)
+     # NUEVOS MÉTODOS 
+    def calculate_correlations(self):
+        if self.df is None or self.df.empty:
+            print("No hay datos disponibles para calcular correlaciones.")
+            return None
+        return self.df.corr()
+
+    def correlation_with_target(self, target_column):
+        if self.df is None or target_column not in self.df.columns:
+            print("La columna objetivo no existe en el DataFrame.")
+            return None
+        return self.df.corr()[target_column].sort_values(ascending=False)

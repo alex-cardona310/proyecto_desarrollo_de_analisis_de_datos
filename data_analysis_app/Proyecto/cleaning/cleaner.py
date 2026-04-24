@@ -89,3 +89,47 @@ class Cleaner:
                 self.df[columna] = 0
 
         return self.df
+    
+    def guardar_limpio(self):
+        import os
+        import sqlite3
+
+        print("Formatos disponibles:")
+        print("1. CSV")
+        print("2. TSV")
+        print("3. SQL")
+
+        opcion = input("Elige el formato para guardar el DataFrame limpio: ").strip()
+
+        carpeta = input("Introduce la ruta de la carpeta donde quieres guardar el archivo: ").strip()
+
+        if not os.path.exists(carpeta):
+            raise ValueError("La carpeta indicada no existe.")
+
+        nombre = input("Introduce el nombre del archivo o tabla sin extensión: ").strip()
+
+        if opcion == "1":
+            ruta = os.path.join(carpeta, f"{nombre}.csv")
+            self.df.to_csv(ruta, index=False)
+            print(f"DataFrame guardado correctamente en: {ruta}")
+
+        elif opcion == "2":
+            ruta = os.path.join(carpeta, f"{nombre}.tsv")
+            self.df.to_csv(ruta, sep="\t", index=False)
+            print(f"DataFrame guardado correctamente en: {ruta}")
+
+        elif opcion == "3":
+            ruta_db = os.path.join(carpeta, f"{nombre}.db")
+            nombre_tabla = input("Introduce el nombre de la tabla SQL: ").strip()
+
+            conexion = sqlite3.connect(ruta_db)
+            self.df.to_sql(nombre_tabla, conexion, if_exists="replace", index=False)
+            conexion.close()
+
+            print(f"DataFrame guardado correctamente en la base de datos: {ruta_db}")
+            print(f"Tabla creada/reemplazada: {nombre_tabla}")
+
+        else:
+            raise ValueError("Opción no válida. Elige 1, 2 o 3.")
+
+        return self.df

@@ -128,7 +128,8 @@ class DataApp:
         print("5. Remove outliers")
         print("6. Validate data range")
         print("7. Normalize")
-        print("8. Go back to main menu")
+        print("8. Save clean dataset")
+        print("9. Go back to main menu")
 
     def preview_dataset(self):
         if self.dataset is None:
@@ -193,6 +194,8 @@ class DataApp:
         elif option == "7":
             self.dataset = cleaner.normalizar_dataframe()
         elif option == "8":
+            self.dataset = cleaner.guardar_limpio()
+        elif option == "9":
             return
         else:
             print("Invalid cleaning option.")

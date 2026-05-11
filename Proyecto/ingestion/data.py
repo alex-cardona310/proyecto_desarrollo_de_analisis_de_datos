@@ -19,6 +19,8 @@ class Data:
     metadata: dict = field(default_factory=dict)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     loaded_at: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    user: str = "admin"
+    password: str = "none"
 
     def load(self) -> None:
         path = Path(self.source_path)
@@ -38,14 +40,16 @@ class Data:
             self.content = pd.read_excel(path, sheet_name=None)
 
         elif source_type == "db":
-            self.content = self._load_sqlite_database(path)
+            self.content = self._load_sqlite_database(path, self.user, self.password)
 
         else:
             raise ValueError(f"Unsupported source type: {self.source_type}")
 
         self.metadata = self._build_metadata()
 
-    def _load_sqlite_database(self, db_path: Path) -> dict[str, pd.DataFrame]:
+    def _load_sqlite_database(self, db_path: Path, user: str, password: str) -> dict[str, pd.DataFrame]:
+        if user != "admin" or password != "none":
+            raise PermissionError("Acceso denegado: Credenciales de base de datos incorrectas.")
         tables_dict: dict[str, pd.DataFrame] = {}
 
         conn = sqlite3.connect(db_path)

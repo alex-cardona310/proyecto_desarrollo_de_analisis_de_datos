@@ -192,16 +192,21 @@ class DataApp:
                 print("No file selected.")
 
         elif option == "3":
-            path = self.select_file("sql")
+            # --- NUEVO BLOQUE DE AUTENTICACIÓN ---
+            print("\n--- SQL Authentication ---")
+            user_input = input("User: ").strip()
+            pass_input = input("Password: ").strip()
 
-            if path:
-                self.connect_sql(path)
+            if user_input == "admin" and pass_input == "none":
+                path = self.select_file("sql")
+                if path:
+                    self.connect_sql(path)
+                else:
+                    print("No database selected.")
             else:
-                print("No database selected.")
+                print("Access Denied: Invalid user or password.")
 
-        else:
-            print("Invalid option.")
-
+                
     def load_csv(self, path):
         try:
             self.dataset = pd.read_csv(path)

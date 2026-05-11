@@ -3,7 +3,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tkinter import Tk, filedialog
-
+from scraping.web_scraper import WebScraper
 
 
 class DataApp:
@@ -41,11 +41,16 @@ class DataApp:
 
             elif option == "6":
                 self.show_sql_tables()
-
-            elif option == "7":
-                self.load_source()
+            
+            elif option == "7" :
+                scraper = WebScraper()
+                self.dataset = scraper.scrape_data()
+                print("Web scraping completed successfully.")
 
             elif option == "8":
+                self.load_source()
+
+            elif option == "9":
                 print("Exiting program...")
                 if self.connection:
                     self.connection.close()
@@ -63,8 +68,9 @@ class DataApp:
         print("4. Exploratory Data Analysis")
         print("5. Data Visualization")
         print("6. Visualize SQL tables")
-        print("7. Load another data source")
-        print("8. Exit")
+        print("7. Web Scraping")
+        print("8. Load another data source")
+        print("9. Exit")
 
     def select_file(self, file_type):
         root = Tk()

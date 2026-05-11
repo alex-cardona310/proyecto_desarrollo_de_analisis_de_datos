@@ -1,5 +1,0 @@
-pandas
-SQLAlchemy
-openpyxl
-matplotlib
-seaborn

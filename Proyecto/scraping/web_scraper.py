@@ -3,7 +3,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-import pandas as pd
 import time
 
 from tkinter import Tk, filedialog
@@ -11,18 +10,15 @@ from tkinter import Tk, filedialog
 
 class WebScraper:
 
-    def __init__(self):
-        self.df = None
-
     def save_file_dialog(self):
 
         root = Tk()
         root.withdraw()
 
         path = filedialog.asksaveasfilename(
-            title="Guardar archivo CSV",
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv")]
+            title="Guardar archivo TXT",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt")]
         )
 
         root.destroy()
@@ -56,36 +52,37 @@ class WebScraper:
         print(f"Productos encontrados: {len(productos)}")
 
         num_columnas = int(
-            input("¿Cuántas columnas quieres extraer?: ")
+            input("¿Cuántos datos quieres extraer?: ")
         )
 
         columnas = []
 
         for i in range(num_columnas):
 
-            nombre_columna = input(
-                f"Nombre de la columna {i+1}: "
+            nombre = input(
+                f"Nombre del dato {i+1}: "
             )
 
             etiqueta = input(
-                f"Etiqueta HTML de {nombre_columna}: "
+                f"Etiqueta HTML de {nombre}: "
             )
 
             clase = input(
-                f"Clase HTML de {nombre_columna}: "
+                f"Clase HTML de {nombre}: "
             )
 
             columnas.append({
-                "nombre": nombre_columna,
+                "nombre": nombre,
                 "etiqueta": etiqueta,
                 "clase": clase
             })
 
-        datos = []
+        contenido_txt = ""
 
         for producto in productos:
 
-            fila = []
+            contenido_txt += "PRODUCTO\n"
+            contenido_txt += "-" * 40 + "\n"
 
             for columna in columnas:
 
@@ -102,26 +99,14 @@ class WebScraper:
 
                     texto = ""
 
-                fila.append(texto)
+                contenido_txt += (
+                    f"{columna['nombre']}: {texto}\n"
+                )
 
-            datos.append(fila)
-
-        encabezados = [
-            columna["nombre"]
-            for columna in columnas
-        ]
-
-        self.df = pd.DataFrame(
-            datos,
-            columns=encabezados
-        )
-
-        print("\nDataFrame generado correctamente:\n")
-
-        print(self.df.head())
+            contenido_txt += "\n"
 
         guardar = input(
-            "\n¿Deseas guardar el resultado en CSV? (s/n): "
+            "\n¿Deseas guardar el resultado en TXT? (s/n): "
         ).lower()
 
         if guardar == "s":
@@ -130,18 +115,20 @@ class WebScraper:
 
             if path:
 
-                self.df.to_csv(
+                with open(
                     path,
-                    index=False,
+                    "w",
                     encoding="utf-8"
-                )
+                ) as file:
 
-                print(f"\nCSV guardado correctamente en:\n{path}")
+                    file.write(contenido_txt)
+
+                print(
+                    f"\nTXT guardado correctamente en:\n{path}"
+                )
 
             else:
 
                 print("Guardado cancelado.")
 
         driver.quit()
-
-        return self.df

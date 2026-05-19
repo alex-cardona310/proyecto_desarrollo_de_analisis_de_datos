@@ -104,9 +104,9 @@ class WebScraper:
                 "clase": clase
             })
 
-        datos = []
-
         contenido_txt = ""
+
+        datos = []
 
         for producto in productos:
 
@@ -119,22 +119,26 @@ class WebScraper:
 
                 try:
 
-                    elemento = producto.find_element(
+                    elementos = producto.find_elements(
                         By.CSS_SELECTOR,
                         f"{columna['etiqueta']}.{columna['clase']}"
                     )
 
-                    texto = elemento.text.strip()
+                    texto = " ".join([
+                        elemento.text.strip()
+                        for elemento in elementos
+                        if elemento.text.strip() != ""
+                    ])
 
                 except:
 
                     texto = ""
 
-                fila.append(texto)
-
                 contenido_txt += (
                     f"{columna['nombre']}: {texto}\n"
                 )
+
+                fila.append(texto)
 
             contenido_txt += "\n"
 
@@ -150,6 +154,21 @@ class WebScraper:
             columns=encabezados
         )
 
+        self.df = self.df.dropna(how="all")
+
+        self.df = self.df[
+            ~(self.df.astype(str).apply(
+                lambda row: row.str.strip().eq("").all(),
+                axis=1
+            ))
+        ]
+
+        self.df = self.df.reset_index(drop=True)
+
+        pd.set_option("display.max_columns", None)
+        pd.set_option("display.width", None)
+        pd.set_option("display.max_colwidth", None)
+
         print("\nDataFrame generated successfully.\n")
 
         print(self.df.head())
@@ -160,47 +179,93 @@ class WebScraper:
             print("1. View first rows")
             print("2. View last rows")
             print("3. View DataFrame information")
-            print("4. View TXT content")
-            print("5. Save as CSV")
-            print("6. Save as JSON")
-            print("7. Save as TXT")
-            print("8. Exit")
+            print("4. Save as CSV")
+            print("5. Save as JSON")
+            print("6. Save as TXT")
+            print("7. Exit")
 
             opcion = input("\nChoose an option: ").strip()
 
             if opcion == "1":
 
                 print("\nFirst rows of the DataFrame:\n")
+
                 print(self.df.head(5))
 
             elif opcion == "2":
 
                 print("\nLast rows of the DataFrame:\n")
+
                 print(self.df.tail(5))
 
             elif opcion == "3":
 
                 print("\nDataFrame information:\n")
+
                 self.df.info()
 
             elif opcion == "4":
-
-                print("\nTXT Content:\n")
-                print(contenido_txt)
-
-            elif opcion == "5":
 
                 path = self.save_file_dialog("csv")
 
                 if path:
 
-                    self.df.to_csv(
-                        path,
-                        index=False,
-                        encoding="utf-8"
-                    )
+                    try:
 
-                    print(f"\nCSV saved successfully at:\n{path}")
+                        self.df.to_csv(
+                            path,
+                            index=False,
+                            encoding="utf-8-sig"
+                        )
+
+                        print(
+                            f"\nCSV saved successfully at:\n{path}"
+                        )
+
+                    except PermissionError:
+
+                        print(
+                            "\nError: The CSV file is open."
+                            "\nClose it and try again."
+                        )
+
+                    except Exception as e:
+
+                        print(f"\nError saving CSV: {e}")
+
+                else:
+
+                    print("Save cancelled.")
+
+            elif opcion == "5":
+
+                path = self.save_file_dialog("json")
+
+                if path:
+
+                    try:
+
+                        self.df.to_json(
+                            path,
+                            orient="records",
+                            indent=4,
+                            force_ascii=False
+                        )
+
+                        print(
+                            f"\nJSON saved successfully at:\n{path}"
+                        )
+
+                    except PermissionError:
+
+                        print(
+                            "\nError: The JSON file is open."
+                            "\nClose it and try again."
+                        )
+
+                    except Exception as e:
+
+                        print(f"\nError saving JSON: {e}")
 
                 else:
 
@@ -208,44 +273,40 @@ class WebScraper:
 
             elif opcion == "6":
 
-                path = self.save_file_dialog("json")
+                path = self.save_file_dialog("txt")
 
                 if path:
 
-                    self.df.to_json(
-                        path,
-                        orient="records",
-                        indent=4,
-                        force_ascii=False
-                    )
+                    try:
 
-                    print(f"\nJSON saved successfully at:\n{path}")
+                        with open(
+                            path,
+                            "w",
+                            encoding="utf-8"
+                        ) as file:
+
+                            file.write(contenido_txt)
+
+                        print(
+                            f"\nTXT saved successfully at:\n{path}"
+                        )
+
+                    except PermissionError:
+
+                        print(
+                            "\nError: The TXT file is open."
+                            "\nClose it and try again."
+                        )
+
+                    except Exception as e:
+
+                        print(f"\nError saving TXT: {e}")
 
                 else:
 
                     print("Save cancelled.")
 
             elif opcion == "7":
-
-                path = self.save_file_dialog("txt")
-
-                if path:
-
-                    with open(
-                        path,
-                        "w",
-                        encoding="utf-8"
-                    ) as file:
-
-                        file.write(contenido_txt)
-
-                    print(f"\nTXT saved successfully at:\n{path}")
-
-                else:
-
-                    print("Save cancelled.")
-
-            elif opcion == "8":
 
                 break
 

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Optional, Union
 import uuid
 import sqlite3
+import psycopg2
+import mysql.connector
 
 import pandas as pd
 
@@ -13,8 +15,8 @@ import pandas as pd
 @dataclass
 class Data:
     name: str
-    source_path: str
-    source_type: str
+    source_path: str   # Para archivos locales o DSN/host de la nube
+    source_type: str   # csv, tsv, excel, db, postgres, mysql
     content: Optional[Union[pd.DataFrame, dict[str, pd.DataFrame]]] = None
     metadata: dict = field(default_factory=dict)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -24,10 +26,6 @@ class Data:
 
     def load(self) -> None:
         path = Path(self.source_path)
-
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {self.source_path}")
-
         source_type = self.source_type.lower()
 
         if source_type == "csv":
@@ -41,6 +39,12 @@ class Data:
 
         elif source_type == "db":
             self.content = self._load_sqlite_database(path, self.user, self.password)
+
+        elif source_type == "postgres":
+            self.content = self._load_postgres_database(self.user, self.password, self.source_path)
+
+        elif source_type == "mysql":
+            self.content = self._load_mysql_database(self.user, self.password, self.source_path)
 
         else:
             raise ValueError(f"Unsupported source type: {self.source_type}")
@@ -61,6 +65,45 @@ class Data:
             for table_name in table_names:
                 query = f'SELECT * FROM "{table_name}"'
                 tables_dict[table_name] = pd.read_sql_query(query, conn)
+        finally:
+            conn.close()
+
+        return tables_dict
+
+    def _load_postgres_database(self, user: str, password: str, dsn: str) -> dict[str, pd.DataFrame]:
+        """
+        dsn debe ser una cadena de conexión tipo:
+        "host=servidor dbname=nombre port=5432"
+        """
+        tables_dict: dict[str, pd.DataFrame] = {}
+        conn = psycopg2.connect(dsn, user=user, password=password)
+        try:
+            query = "SELECT table_name FROM information_schema.tables WHERE table_schema='public';"
+            tables_df = pd.read_sql_query(query, conn)
+            table_names = tables_df["table_name"].tolist()
+
+            for table_name in table_names:
+                query = f'SELECT * FROM "{table_name}"'
+                tables_dict[table_name] = pd.read_sql_query(query, conn)
+        finally:
+            conn.close()
+
+        return tables_dict
+
+    def _load_mysql_database(self, user: str, password: str, host: str) -> dict[str, pd.DataFrame]:
+        """
+        host debe incluir dirección, puerto y nombre de base, ejemplo:
+        "localhost:3306/nombre_base"
+        """
+        tables_dict: dict[str, pd.DataFrame] = {}
+        conn = mysql.connector.connect(user=user, password=password, host=host)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SHOW TABLES;")
+            table_names = [row[0] for row in cursor.fetchall()]
+
+            for table_name in table_names:
+                tables_dict[table_name] = pd.read_sql(f"SELECT * FROM {table_name}", conn)
         finally:
             conn.close()
 

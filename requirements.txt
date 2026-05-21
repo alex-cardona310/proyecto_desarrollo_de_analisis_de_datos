@@ -3,3 +3,7 @@ SQLAlchemy
 openpyxl
 matplotlib
 seaborn
+selenium
+requests
+beautifulsoup4
+pytest

@@ -1,15 +1,23 @@
-import pandas as pd
-import sqlite3
+import os
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-from tkinter import Tk, filedialog
 from scraping.web_scraper import WebScraper
+
+# Optional import for SQL support. If SQLAlchemy is not installed, SQL features will be disabled
+try:
+    from sqlalchemy import create_engine, inspect
+except Exception:
+    create_engine = None
+    inspect = None
+from tkinter import Tk, filedialog
 
 
 class DataApp:
+
     def __init__(self):
         self.dataset = None
-        self.connection = None
+        self.engine = None  # Reemplaza self.connection de sqlite3
         self.source_type = None
         self.sql_tables = []
 
@@ -41,8 +49,8 @@ class DataApp:
 
             elif option == "6":
                 self.show_sql_tables()
-            
-            elif option == "7" :
+
+            elif option == "7":
                 scraper = WebScraper()
                 self.dataset = scraper.scrape_data()
                 print("Web scraping completed successfully.")
@@ -52,8 +60,8 @@ class DataApp:
 
             elif option == "9":
                 print("Exiting program...")
-                if self.connection:
-                    self.connection.close()
+                if self.engine:
+                    self.engine.dispose()  # Cierra el pool de conexiones a la nube
                 break
 
             else:
@@ -79,21 +87,13 @@ class DataApp:
         if file_type == "csv":
             path = filedialog.askopenfilename(
                 title="Selecciona un archivo CSV",
-                filetypes=[("CSV files", "*.csv")]
+                filetypes=[("CSV files", "*.csv")],
             )
 
         elif file_type == "tsv":
             path = filedialog.askopenfilename(
                 title="Selecciona un archivo TSV",
-                filetypes=[("TSV files", "*.tsv")]
-            )
-
-        elif file_type == "sql":
-            path = filedialog.askopenfilename(
-                title="Selecciona una base de datos SQL",
-                filetypes=[
-                    ("SQLite databases", "*.db *.sqlite *.sqlite3"),
-                    ("All files", "*.*")]
+                filetypes=[("TSV files", "*.tsv")],
             )
         else:
             path = ""
@@ -109,14 +109,14 @@ class DataApp:
             path = filedialog.asksaveasfilename(
                 title="Guardar archivo CSV",
                 defaultextension=".csv",
-                filetypes=[("CSV files", "*.csv")]
+                filetypes=[("CSV files", "*.csv")],
             )
 
         elif file_type == "tsv":
             path = filedialog.asksaveasfilename(
                 title="Guardar archivo TSV",
                 defaultextension=".tsv",
-                filetypes=[("TSV files", "*.tsv")]
+                filetypes=[("TSV files", "*.tsv")],
             )
 
         else:
@@ -135,8 +135,8 @@ class DataApp:
             filetypes=[
                 ("PNG image", "*.png"),
                 ("JPG image", "*.jpg"),
-                ("PDF file", "*.pdf")
-            ]
+                ("PDF file", "*.pdf"),
+            ],
         )
 
         root.destroy()
@@ -171,13 +171,12 @@ class DataApp:
         print("\nSelect data source:")
         print("1. CSV")
         print("2. TSV")
-        print("3. SQL database")
+        print("3. Cloud SQL Database")
 
         option = input("Option: ").strip()
 
         if option == "1":
             path = self.select_file("csv")
-
             if path:
                 self.load_csv(path)
             else:
@@ -185,34 +184,33 @@ class DataApp:
 
         elif option == "2":
             path = self.select_file("tsv")
-
             if path:
                 self.load_tsv(path)
             else:
                 print("No file selected.")
 
         elif option == "3":
-            # --- NUEVO BLOQUE DE AUTENTICACIÓN ---
             print("\n--- SQL Authentication ---")
             user_input = input("User: ").strip()
             pass_input = input("Password: ").strip()
 
             if user_input == "admin" and pass_input == "none":
-                path = self.select_file("sql")
-                if path:
-                    self.connect_sql(path)
+                # Solicita directamente el URI de conexión de tu proveedor en la nube
+                print("\nEjemplo de URI: postgresql://user:password@host:5432/dbname")
+                db_uri = input("Introduce la URI de la base de datos en la nube: ").strip()
+                
+                if db_uri:
+                    self.connect_sql(db_uri)
                 else:
-                    print("No database selected.")
+                    print("No URI provided.")
             else:
                 print("Access Denied: Invalid user or password.")
 
-                
     def load_csv(self, path):
         try:
             self.dataset = pd.read_csv(path)
             self.source_type = "csv"
             print("CSV file loaded successfully.")
-
         except Exception as e:
             print(f"Error loading CSV file: {e}")
 
@@ -221,22 +219,25 @@ class DataApp:
             self.dataset = pd.read_csv(path, sep="\t")
             self.source_type = "tsv"
             print("TSV file loaded successfully.")
-
         except Exception as e:
             print(f"Error loading TSV file: {e}")
 
-    def connect_sql(self, path):
+    def connect_sql(self, db_uri):
         try:
-            self.connection = sqlite3.connect(path)
+            if create_engine is None or inspect is None:
+                print("SQLAlchemy is not installed. SQL features are unavailable.")
+                return
+            # Crea el motor de conexión global compatible con bases de datos en la nube
+            self.engine = create_engine(db_uri)
             self.source_type = "sql"
-            print("Connected to SQL database successfully.")
+            print("Connected to Cloud SQL database successfully.")
 
-            query = "SELECT name FROM sqlite_master WHERE type='table';"
-            tables = pd.read_sql_query(query, self.connection)
-            self.sql_tables = tables["name"].tolist()
+            # Utiliza el inspector de SQLAlchemy para extraer los nombres de las tablas en la nube
+            inspector = inspect(self.engine)
+            self.sql_tables = inspector.get_table_names()
 
             if not self.sql_tables:
-                print("No tables found in database.")
+                print("No tables found in cloud database.")
                 return
 
             print("\nAvailable tables:")
@@ -256,15 +257,17 @@ class DataApp:
                 return
 
             table_name = self.sql_tables[choice]
+            
+            # Lee la tabla directamente usando el Engine de SQLAlchemy
             self.dataset = pd.read_sql_query(
-                f"SELECT * FROM {table_name}",
-                self.connection
+                f"SELECT * FROM {table_name}", 
+                con=self.engine
             )
 
-            print(f"Table '{table_name}' loaded successfully.")
+            print(f"Table '{table_name}' loaded successfully from cloud.")
 
         except Exception as e:
-            print(f"Error connecting to SQL database: {e}")
+            print(f"Error connecting to Cloud SQL database: {e}")
 
     def preview_dataset(self):
         if self.dataset is None:
@@ -273,7 +276,6 @@ class DataApp:
 
         print("\nDataset preview:")
         print(self.dataset.head())
-
         input("\nPress Enter to continue...")
 
     def dataset_info(self):
@@ -290,7 +292,6 @@ class DataApp:
 
         print("\nData types:")
         print(self.dataset.dtypes)
-
         input("\nPress Enter to continue...")
 
     def clean_data(self):
@@ -337,12 +338,9 @@ class DataApp:
                 value = input("Value to fill empty cells: ").strip()
 
                 self.dataset[column] = self.dataset[column].replace(
-                    r"^\s*$",
-                    pd.NA,
-                    regex=True
+                    r"^\s*$", pd.NA, regex=True
                 )
                 self.dataset[column] = self.dataset[column].fillna(value)
-
                 print("Empty values filled.")
 
             elif option == "4":
@@ -361,19 +359,14 @@ class DataApp:
                 try:
                     if new_type == "int":
                         self.dataset[column] = self.dataset[column].astype(int)
-
                     elif new_type == "float":
                         self.dataset[column] = self.dataset[column].astype(float)
-
                     elif new_type == "str":
                         self.dataset[column] = self.dataset[column].astype(str)
-
                     else:
                         print("Invalid type.")
                         continue
-
                     print("Column type converted successfully.")
-
                 except Exception as e:
                     print(f"Error converting column: {e}")
 
@@ -403,12 +396,10 @@ class DataApp:
                 upper_limit = q3 + 1.5 * iqr
 
                 before = len(self.dataset)
-
                 self.dataset = self.dataset[
                     (self.dataset[column] >= lower_limit) &
                     (self.dataset[column] <= upper_limit)
                 ].reset_index(drop=True)
-
                 after = len(self.dataset)
 
                 print(f"Outliers removed: {before - after}")
@@ -431,7 +422,6 @@ class DataApp:
                             (self.dataset[column] - min_value) /
                             (max_value - min_value)
                         )
-
                 print("Numeric columns normalized.")
 
             elif option == "7":
@@ -443,7 +433,6 @@ class DataApp:
 
                 if format_option == "1":
                     path = self.save_file_dialog("csv")
-
                     if path:
                         self.dataset.to_csv(path, index=False)
                         print(f"Dataset saved at: {path}")
@@ -452,19 +441,16 @@ class DataApp:
 
                 elif format_option == "2":
                     path = self.save_file_dialog("tsv")
-
                     if path:
                         self.dataset.to_csv(path, sep="\t", index=False)
                         print(f"Dataset saved at: {path}")
                     else:
                         print("Save cancelled.")
-
                 else:
                     print("Invalid format.")
 
             elif option == "8":
                 break
-
             else:
                 print("Invalid option.")
 
@@ -485,7 +471,7 @@ class DataApp:
             "std_dev": numeric.std(),
             "q1": numeric.quantile(0.25),
             "q2": numeric.quantile(0.50),
-            "q3": numeric.quantile(0.75)
+            "q3": numeric.quantile(0.75),
         })
 
         print("\nSummary statistics:\n")
@@ -534,7 +520,7 @@ class DataApp:
                     plt.hist(
                         self.dataset[column].dropna(),
                         bins=10,
-                        edgecolor="black"
+                        edgecolor="black",
                     )
                     plt.title(f"Histogram of {column}")
                     plt.xlabel(column)
@@ -543,7 +529,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Invalid numeric column.")
 
@@ -555,7 +540,9 @@ class DataApp:
 
                 if column in all_columns:
                     fig = plt.figure(figsize=(8, 5))
-                    self.dataset[column].value_counts().head(10).plot(kind="bar")
+                    self.dataset[column].value_counts().head(10).plot(
+                        kind="bar"
+                    )
                     plt.title(f"Bar chart of {column}")
                     plt.xlabel(column)
                     plt.ylabel("Frequency")
@@ -565,7 +552,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Invalid column.")
 
@@ -578,8 +564,7 @@ class DataApp:
                 if column in all_columns:
                     fig = plt.figure(figsize=(8, 8))
                     self.dataset[column].value_counts().head(10).plot(
-                        kind="pie",
-                        autopct="%1.1f%%"
+                        kind="pie", autopct="%1.1f%%"
                     )
                     plt.title(f"Pie chart of {column}")
                     plt.ylabel("")
@@ -587,7 +572,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Invalid column.")
 
@@ -612,7 +596,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Both columns must be numeric.")
 
@@ -624,7 +607,9 @@ class DataApp:
 
                 if column in numeric_columns:
                     fig = plt.figure(figsize=(8, 5))
-                    self.dataset[column].reset_index(drop=True).plot(kind="line")
+                    self.dataset[column].reset_index(drop=True).plot(
+                        kind="line"
+                    )
                     plt.title(f"Line chart of {column}")
                     plt.xlabel("Index")
                     plt.ylabel(column)
@@ -632,7 +617,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Invalid numeric column.")
 
@@ -651,7 +635,6 @@ class DataApp:
                     plt.show()
                     self.ask_save_plot_after_close(fig)
                     plt.close(fig)
-
                 else:
                     print("Invalid numeric column.")
 
@@ -672,7 +655,6 @@ class DataApp:
 
             elif option == "8":
                 break
-
             else:
                 print("Invalid option.")
 

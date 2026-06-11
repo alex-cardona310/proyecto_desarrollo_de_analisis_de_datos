@@ -3,10 +3,10 @@ class ModelManager:
         self._models = models if models is not None else {}
         self._metrics = metrics if metrics is not None else {}
 
-    def new_model(self):
+    def linearregresion(self):
         pass
 
-    def del_model(self):
+    def clusteringkmeans(self):
         pass
 
     def save_model(self):
@@ -18,5 +18,5 @@ class ModelManager:
     def predict(self):
         pass
 
-    def evaluate(self):
+    def Metricasdecalidad(self):
         pass

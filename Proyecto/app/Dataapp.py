@@ -490,6 +490,18 @@ class DataApp:
                 self.dataset = imputed_df
                 print("KNN imputation completed.")
 
+            if option == "2":
+                print("Kmeans not implemented yet.")
+                # Aquí podrías agregar la implementación de Kmeans
+
+            if option == "3":
+                print("otro algoritmo xd not implemented yet.")
+                # Aquí podrías agregar la implementación de otro algoritmo
+
+            elif option == "4":
+                break
+            else:             
+                print("Invalid option.")
 
     def run_eda(self):
         if self.dataset is None:

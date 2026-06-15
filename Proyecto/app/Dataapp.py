@@ -2,7 +2,11 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
+from proyecto_desarrollo_de_analisis_de_datos.Proyecto.cleaning import cleaner
 from scraping.web_scraper import WebScraper
+from cleaning.cleaner import Cleaner
+from analysis import model_manager as ModelManager
 
 # Optional import for SQL support. If SQLAlchemy is not installed, SQL features will be disabled
 try:
@@ -319,7 +323,8 @@ class DataApp:
 
             if option == "1":
                 before = len(self.dataset)
-                self.dataset = self.dataset.drop_duplicates().reset_index(drop=True)
+                cleaner = Cleaner(self.dataset)
+                self.dataset = cleaner.eliminar_duplicados()
                 after = len(self.dataset)
                 print(f"Duplicates removed: {before - after}")
 
@@ -332,7 +337,7 @@ class DataApp:
             elif option == "3":
                 print("\nColumns:")
                 print(list(self.dataset.columns))
-
+                
                 column = input("Choose column: ").strip()
 
                 if column not in self.dataset.columns:
@@ -341,11 +346,13 @@ class DataApp:
 
                 value = input("Value to fill empty cells: ").strip()
 
-                self.dataset[column] = self.dataset[column].replace(
-                    r"^\s*$", pd.NA, regex=True
-                )
-                self.dataset[column] = self.dataset[column].fillna(value)
-                print("Empty values filled.")
+                cleaner = Cleaner(self.dataset)
+
+                try:
+                    self.dataset = cleaner.rellenar_espacios_vacios(column, value)
+                    print("Empty values filled.")
+                except ValueError as e:
+                    print(e)
 
             elif option == "4":
                 print("\nColumns:")
@@ -457,6 +464,32 @@ class DataApp:
                 break
             else:
                 print("Invalid option.")
+
+    def modelingmenu(self):
+        if self.dataset is None:
+            print("No dataset loaded.")
+            return
+        
+        while True:
+            print("\nModeling")
+            print("=" * 60)
+            print("1. Knearest Neighbors (KNN)")
+            print("2. Kmeans")
+            print("3. otro algoritmo xd")
+            print("4. Back to main menu")
+            
+            option = input("Choose an ML algorithm: ").strip()
+
+            if option == "1":
+                print("Running KNN classification imputation...")
+                imputed_df, metrics, best_k = ModelManager.knn_classification_imputation(
+                    self.dataset, target_column="target", k_values=[3, 5, 7]
+                )
+                print(f"Best k: {best_k}")
+                print(f"Metrics: {metrics}")
+                self.dataset = imputed_df
+                print("KNN imputation completed.")
+
 
     def run_eda(self):
         if self.dataset is None:

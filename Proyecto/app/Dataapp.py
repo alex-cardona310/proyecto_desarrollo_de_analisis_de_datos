@@ -59,6 +59,9 @@ class DataApp:
                 self.load_source()
 
             elif option == "9":
+                pass
+
+            elif option == "10":
                 print("Exiting program...")
                 if self.engine:
                     self.engine.dispose()  # Cierra el pool de conexiones a la nube
@@ -78,7 +81,8 @@ class DataApp:
         print("6. Visualize SQL tables")
         print("7. Web Scraping")
         print("8. Load another data source")
-        print("9. Exit")
+        print("9. Models")
+        print("10. Exit")
 
     def select_file(self, file_type):
         root = Tk()

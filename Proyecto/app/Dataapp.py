@@ -1,78 +1,81 @@
 import os
+import json
+import io
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
+import model_manager
 
-from proyecto_desarrollo_de_analisis_de_datos.Proyecto.cleaning import cleaner
-from scraping.web_scraper import WebScraper
-from cleaning.cleaner import Cleaner
-from analysis import model_manager as ModelManager
+from model_manager import ModelManager
 
-# Optional import for SQL support. If SQLAlchemy is not installed, SQL features will be disabled
+try:
+    from app.cleaning.cleaner import Cleaner
+except ImportError:
+    Cleaner = None
+
+try:
+    from app.scraping.web_scraper import WebScraper
+except ImportError:
+    WebScraper = None
+
 try:
     from sqlalchemy import create_engine, inspect
 except Exception:
     create_engine = None
     inspect = None
-from tkinter import Tk, filedialog
 
+from tkinter import Tk, filedialog
 
 class DataApp:
 
     def __init__(self):
         self.dataset = None
-        self.engine = None  # Reemplaza self.connection de sqlite3
+        self.engine = None  
         self.source_type = None
         self.sql_tables = []
+        self.save_directory = r"C:/Users/aleva/Desktop/ESCOM/DAPCD/data_analysis_app/data_analysis_app/adicionales/Datasetsmodelos"
 
     def run(self):
-        print("=" * 60)
-        print("Data Analysis App")
-        print("=" * 60)
-
+        print("==================================================")
+        print("          DATA ANALYSIS PIPELINE MODULE           ")
+        print("==================================================")
         self.load_source()
 
         while True:
             self.show_menu()
-            option = input("Choose an option: ").strip()
+            option = input("Choose an option (1-10): ").strip()
 
             if option == "1":
                 self.preview_dataset()
-
             elif option == "2":
                 self.dataset_info()
-
             elif option == "3":
                 self.clean_data()
-
             elif option == "4":
                 self.run_eda()
-
             elif option == "5":
                 self.visualize_data()
-
             elif option == "6":
                 self.show_sql_tables()
-
             elif option == "7":
-                scraper = WebScraper()
-                self.dataset = scraper.scrape_data()
-                print("Web scraping completed successfully.")
-
+                if WebScraper is not None:
+                    scraper = WebScraper()
+                    self.dataset = scraper.scrape_data()
+                    print("[SUCCESS] Web scraping ingestion completed successfully.")
+                else:
+                    print("[ERROR] WebScraper module not found in context.")
             elif option == "8":
                 self.load_source()
-
             elif option == "9":
-                pass
-
+                self.modeling_menu()
             elif option == "10":
-                print("Exiting program...")
+                print("Closing system core handles. Program terminated.")
                 if self.engine:
-                    self.engine.dispose()  # Cierra el pool de conexiones a la nube
+                    self.engine.dispose()  
                 break
-
             else:
-                print("Invalid option.")
+                print("[ERROR] Invalid operational entry selection.")
 
     def show_menu(self):
         print("\nMenu")
@@ -88,201 +91,128 @@ class DataApp:
         print("9. Models")
         print("10. Exit")
 
+    def manage_chart_flow(self, fig, default_filename):
+        plt.show()
+        print(f"\n--- Chart Options: {default_filename} ---")
+        print("1. Save chart to disk layout location")
+        print("2. Close chart window and clear buffer memory")
+        
+        while True:
+            choice = input("Select operation (1-2): ").strip()
+            if choice == '1':
+                if not os.path.exists(self.save_directory):
+                    os.makedirs(self.save_directory, exist_ok=True)
+                full_path = os.path.join(self.save_directory, default_filename)
+                fig.savefig(full_path, bbox_inches='tight', dpi=300)
+                print(f"[SUCCESS] Chart saved to disk path layout: {full_path}")
+                break
+            elif choice == '2':
+                print("Visualization context dismissed without updates.")
+                break
+            else:
+                print("Invalid entry selection. Provide 1 or 2.")
+        plt.close(fig)
+
     def select_file(self, file_type):
         root = Tk()
         root.withdraw()
-
-        if file_type == "csv":
-            path = filedialog.askopenfilename(
-                title="Selecciona un archivo CSV",
-                filetypes=[("CSV files", "*.csv")],
-            )
-
-        elif file_type == "tsv":
-            path = filedialog.askopenfilename(
-                title="Selecciona un archivo TSV",
-                filetypes=[("TSV files", "*.tsv")],
-            )
-        else:
-            path = ""
-
+        path = filedialog.askopenfilename(
+            title=f"Select source {file_type.upper()} file",
+            filetypes=[(f"{file_type.upper()} files", f"*.{file_type}")] if file_type != "notebook" else [("Jupyter Notebooks", "*.ipynb")]
+        )
         root.destroy()
         return path
 
     def save_file_dialog(self, file_type):
         root = Tk()
         root.withdraw()
-
-        if file_type == "csv":
-            path = filedialog.asksaveasfilename(
-                title="Guardar archivo CSV",
-                defaultextension=".csv",
-                filetypes=[("CSV files", "*.csv")],
-            )
-
-        elif file_type == "tsv":
-            path = filedialog.asksaveasfilename(
-                title="Guardar archivo TSV",
-                defaultextension=".tsv",
-                filetypes=[("TSV files", "*.tsv")],
-            )
-
-        else:
-            path = ""
-
-        root.destroy()
-        return path
-
-    def save_plot_dialog(self):
-        root = Tk()
-        root.withdraw()
-
         path = filedialog.asksaveasfilename(
-            title="Guardar gráfica",
-            defaultextension=".png",
-            filetypes=[
-                ("PNG image", "*.png"),
-                ("JPG image", "*.jpg"),
-                ("PDF file", "*.pdf"),
-            ],
+            title=f"Save clean dataset as {file_type.upper()}",
+            defaultextension=f".{file_type}",
+            filetypes=[(f"{file_type.upper()} files", f"*.{file_type}")]
         )
-
         root.destroy()
         return path
-
-    def ask_save_plot_after_close(self, figure):
-        while True:
-            print("\nWhat do you want to do with this chart?")
-            print("1. Save chart")
-            print("2. Close without saving")
-
-            option = input("Choose an option: ").strip()
-
-            if option == "1":
-                path = self.save_plot_dialog()
-
-                if path:
-                    figure.savefig(path, bbox_inches="tight")
-                    print(f"Chart saved successfully at: {path}")
-                else:
-                    print("Save cancelled.")
-                break
-
-            elif option == "2":
-                print("Chart closed without saving.")
-                break
-
-            else:
-                print("Invalid option.")
 
     def load_source(self):
-        print("\nSelect data source:")
-        print("1. CSV")
-        print("2. TSV")
-        print("3. Cloud SQL Database")
+        print("\nSelect target data source format:")
+        print("1. Standard CSV File Structure")
+        print("2. Tab-Separated Values (TSV)")
+        print("3. Cloud-Mounted Remote SQL Database")
 
-        option = input("Option: ").strip()
+        option = input("Select input pipeline (1-3): ").strip()
 
         if option == "1":
             path = self.select_file("csv")
-            if path:
-                self.load_csv(path)
-            else:
-                print("No file selected.")
-
+            if path: self.load_csv(path)
+            else: print("Pipeline initialization canceled.")
         elif option == "2":
             path = self.select_file("tsv")
-            if path:
-                self.load_tsv(path)
-            else:
-                print("No file selected.")
-
+            if path: self.load_tsv(path)
+            else: print("Pipeline initialization canceled.")
         elif option == "3":
-            print("\n--- SQL Authentication ---")
-            user_input = input("User: ").strip()
-            pass_input = input("Password: ").strip()
+            print("\n--- Cloud SQL Server Secure Gate Authentication ---")
+            user_input = input("Username: ").strip()
+            pass_input = input("Secure Key Phrase: ").strip()
 
             if user_input == "admin" and pass_input == "none":
-                # Solicita directamente el URI de conexión de tu proveedor en la nube
-                print("\nEjemplo de URI: postgresql://user:password@host:5432/dbname")
-                db_uri = input("Introduce la URI de la base de datos en la nube: ").strip()
-                
-                if db_uri:
-                    self.connect_sql(db_uri)
-                else:
-                    print("No URI provided.")
+                db_uri = input("Input cloud database connection URI string: ").strip()
+                if db_uri: self.connect_sql(db_uri)
             else:
-                print("Access Denied: Invalid user or password.")
+                print("Authorization Denied: Handshake rejection.")
 
     def load_csv(self, path):
         try:
             self.dataset = pd.read_csv(path)
             self.source_type = "csv"
-            print("CSV file loaded successfully.")
+            print("[SUCCESS] Data engine mapped file contents safely from CSV.")
         except Exception as e:
-            print(f"Error loading CSV file: {e}")
+            print(f"[CRITICAL] Operational filesystem crash: {e}")
 
     def load_tsv(self, path):
         try:
             self.dataset = pd.read_csv(path, sep="\t")
             self.source_type = "tsv"
-            print("TSV file loaded successfully.")
+            print("[SUCCESS] Data engine mapped file contents safely from TSV.")
         except Exception as e:
-            print(f"Error loading TSV file: {e}")
+            print(f"[CRITICAL] Operational filesystem crash: {e}")
 
     def connect_sql(self, db_uri):
+        if create_engine is None:
+            print("[ERROR] SQLAlchemy libraries missing from current machine environment.")
+            return
         try:
-            if create_engine is None or inspect is None:
-                print("SQLAlchemy is not installed. SQL features are unavailable.")
-                return
-            # Crea el motor de conexión global compatible con bases de datos en la nube
             self.engine = create_engine(db_uri)
             self.source_type = "sql"
-            print("Connected to Cloud SQL database successfully.")
+            print("[SUCCESS] Secure cryptographic pipe hooked up to Cloud Database.")
 
-            # Utiliza el inspector de SQLAlchemy para extraer los nombres de las tablas en la nube
             inspector = inspect(self.engine)
             self.sql_tables = inspector.get_table_names()
 
             if not self.sql_tables:
-                print("No tables found in cloud database.")
+                print("[WARNING] No data tables found within current catalog namespace.")
                 return
 
-            print("\nAvailable tables:")
+            print("\nAvailable Database Catalog Tables:")
             for i, table in enumerate(self.sql_tables, start=1):
                 print(f"{i}. {table}")
 
-            choice = input("Choose table number: ").strip()
-
-            if not choice.isdigit():
-                print("Invalid table option.")
-                return
-
-            choice = int(choice) - 1
-
-            if choice < 0 or choice >= len(self.sql_tables):
-                print("Invalid table number.")
-                return
-
-            table_name = self.sql_tables[choice]
+            choice = input("Target relational table index value: ").strip()
+            if not choice.isdigit(): return
             
-            # Lee la tabla directamente usando el Engine de SQLAlchemy
-            self.dataset = pd.read_sql_query(
-                f"SELECT * FROM {table_name}", 
-                con=self.engine
-            )
-
-            print(f"Table '{table_name}' loaded successfully from cloud.")
-
+            idx = int(choice) - 1
+            if 0 <= idx < len(self.sql_tables):
+                t_name = self.sql_tables[idx]
+                self.dataset = pd.read_sql_query(f"SELECT * FROM {t_name}", con=self.engine)
+                print(f"[SUCCESS] Synchronized internal memory with table: '{t_name}'")
         except Exception as e:
-            print(f"Error connecting to Cloud SQL database: {e}")
+            print(f"[CRITICAL] Remote connection interface pipe failed: {e}")
 
     def preview_dataset(self):
         if self.dataset is None:
             print("No dataset loaded.")
             return
-
-        print("\nDataset preview:")
+        print("\nTop Row Records Preview:")
         print(self.dataset.head())
         input("\nPress Enter to continue...")
 
@@ -290,15 +220,10 @@ class DataApp:
         if self.dataset is None:
             print("No dataset loaded.")
             return
-
-        print("\nDataset information:")
-        print(f"Source type: {self.source_type}")
-        print(f"Rows and columns: {self.dataset.shape}")
-
-        print("\nColumns:")
-        print(list(self.dataset.columns))
-
-        print("\nData types:")
+        print(f"\n[METADATA] Pipeline Format Flag: {self.source_type}")
+        print(f"[METADATA] Vector Matrix Shape Dimensions: {self.dataset.shape}")
+        print(f"[METADATA] Features Registry List: {list(self.dataset.columns)}")
+        print("\nStructural Primitive Data Types:")
         print(self.dataset.dtypes)
         input("\nPress Enter to continue...")
 
@@ -322,11 +247,14 @@ class DataApp:
             option = input("Choose a cleaning option: ").strip()
 
             if option == "1":
-                before = len(self.dataset)
-                cleaner = Cleaner(self.dataset)
-                self.dataset = cleaner.eliminar_duplicados()
-                after = len(self.dataset)
-                print(f"Duplicates removed: {before - after}")
+                if Cleaner is not None:
+                    before = len(self.dataset)
+                    cleaner_obj = Cleaner(self.dataset)
+                    self.dataset = cleaner_obj.eliminar_duplicados()
+                    after = len(self.dataset)
+                    print(f"Duplicates removed: {before - after}")
+                else:
+                    print("Error: Cleaner module not found.")
 
             elif option == "2":
                 before = len(self.dataset)
@@ -337,36 +265,31 @@ class DataApp:
             elif option == "3":
                 print("\nColumns:")
                 print(list(self.dataset.columns))
-                
                 column = input("Choose column: ").strip()
-
                 if column not in self.dataset.columns:
                     print("Invalid column.")
                     continue
-
                 value = input("Value to fill empty cells: ").strip()
-
-                cleaner = Cleaner(self.dataset)
-
-                try:
-                    self.dataset = cleaner.rellenar_espacios_vacios(column, value)
+                if Cleaner is not None:
+                    cleaner_obj = Cleaner(self.dataset)
+                    try:
+                        self.dataset = cleaner_obj.rellenar_espacios_vacios(column, value)
+                        print("Empty values filled.")
+                    except ValueError as e:
+                        print(e)
+                else:
+                    self.dataset[column] = self.dataset[column].fillna(value)
                     print("Empty values filled.")
-                except ValueError as e:
-                    print(e)
 
             elif option == "4":
                 print("\nColumns:")
                 print(list(self.dataset.columns))
-
                 column = input("Choose column: ").strip()
-
                 if column not in self.dataset.columns:
                     print("Invalid column.")
                     continue
-
                 print("Available types: int, float, str")
                 new_type = input("Choose type: ").strip().lower()
-
                 try:
                     if new_type == "int":
                         self.dataset[column] = self.dataset[column].astype(int)
@@ -382,66 +305,43 @@ class DataApp:
                     print(f"Error converting column: {e}")
 
             elif option == "5":
-                numeric_columns = self.dataset.select_dtypes(
-                    include=["number"]
-                ).columns.tolist()
-
+                numeric_columns = self.dataset.select_dtypes(include=["number"]).columns.tolist()
                 if not numeric_columns:
                     print("No numeric columns available.")
                     continue
-
                 print("\nNumeric columns:")
                 print(numeric_columns)
-
                 column = input("Choose numeric column: ").strip()
-
                 if column not in numeric_columns:
                     print("Invalid numeric column.")
                     continue
-
                 q1 = self.dataset[column].quantile(0.25)
                 q3 = self.dataset[column].quantile(0.75)
                 iqr = q3 - q1
-
                 lower_limit = q1 - 1.5 * iqr
                 upper_limit = q3 + 1.5 * iqr
-
                 before = len(self.dataset)
-                self.dataset = self.dataset[
-                    (self.dataset[column] >= lower_limit) &
-                    (self.dataset[column] <= upper_limit)
-                ].reset_index(drop=True)
+                self.dataset = self.dataset[(self.dataset[column] >= lower_limit) & (self.dataset[column] <= upper_limit)].reset_index(drop=True)
                 after = len(self.dataset)
-
                 print(f"Outliers removed: {before - after}")
 
             elif option == "6":
-                numeric_columns = self.dataset.select_dtypes(
-                    include=["number"]
-                ).columns.tolist()
-
+                numeric_columns = self.dataset.select_dtypes(include=["number"]).columns.tolist()
                 if not numeric_columns:
                     print("No numeric columns available.")
                     continue
-
                 for column in numeric_columns:
                     min_value = self.dataset[column].min()
                     max_value = self.dataset[column].max()
-
                     if max_value != min_value:
-                        self.dataset[column] = (
-                            (self.dataset[column] - min_value) /
-                            (max_value - min_value)
-                        )
+                        self.dataset[column] = (self.dataset[column] - min_value) / (max_value - min_value)
                 print("Numeric columns normalized.")
 
             elif option == "7":
                 print("\nAvailable formats:")
                 print("1. CSV")
                 print("2. TSV")
-
                 format_option = input("Choose format: ").strip()
-
                 if format_option == "1":
                     path = self.save_file_dialog("csv")
                     if path:
@@ -449,7 +349,6 @@ class DataApp:
                         print(f"Dataset saved at: {path}")
                     else:
                         print("Save cancelled.")
-
                 elif format_option == "2":
                     path = self.save_file_dialog("tsv")
                     if path:
@@ -465,74 +364,109 @@ class DataApp:
             else:
                 print("Invalid option.")
 
-    def modelingmenu(self):
-        if self.dataset is None:
-            print("No dataset loaded.")
-            return
-        
-        while True:
-            print("\nModeling")
-            print("=" * 60)
-            print("1. Knearest Neighbors (KNN)")
-            print("2. Kmeans")
-            print("3. otro algoritmo xd")
-            print("4. Back to main menu")
-            
-            option = input("Choose an ML algorithm: ").strip()
-
-            if option == "1":
-                print("Running KNN classification imputation...")
-                imputed_df, metrics, best_k = ModelManager.knn_classification_imputation(
-                    self.dataset, target_column="target", k_values=[3, 5, 7]
-                )
-                print(f"Best k: {best_k}")
-                print(f"Metrics: {metrics}")
-                self.dataset = imputed_df
-                print("KNN imputation completed.")
-
-            if option == "2":
-                print("Kmeans not implemented yet.")
-                # Aquí podrías agregar la implementación de Kmeans
-
-            if option == "3":
-                print("otro algoritmo xd not implemented yet.")
-                # Aquí podrías agregar la implementación de otro algoritmo
-
-            elif option == "4":
-                break
-            else:             
-                print("Invalid option.")
-
     def run_eda(self):
         if self.dataset is None:
             print("No dataset loaded.")
             return
-
         numeric = self.dataset.select_dtypes(include=["number"])
-
         if numeric.empty:
-            print("No numeric columns available.")
+            print("[INFO] No numerical attributes present within the current matrix dataframe.")
             return
-
         summary = pd.DataFrame({
-            "mean": numeric.mean(),
-            "median": numeric.median(),
-            "std_dev": numeric.std(),
-            "q1": numeric.quantile(0.25),
-            "q2": numeric.quantile(0.50),
-            "q3": numeric.quantile(0.75),
+            "mean": numeric.mean(), "median": numeric.median(), "std_dev": numeric.std()
         })
-
-        print("\nSummary statistics:\n")
-        formatted_summary = summary.map(lambda x: f"{x:,.2f}")
-        print(formatted_summary.to_string())
-
-        print("\nCorrelation matrix:\n")
-        corr = numeric.corr()
-        formatted_corr = corr.map(lambda x: f"{x:,.2f}")
-        print(formatted_corr.to_string())
-
+        print("\nStatistical Matrix Distribution Parameters Summary Evaluation:")
+        print(summary.to_string())
         input("\nPress Enter to continue...")
+
+    def modeling_menu(self):
+        while True:
+            print("\nModeling")
+            print("=" * 60)
+            print("0. Import/Extract data from Jupyter Notebook (.ipynb)")
+            print("1. K-Nearest Neighbors (KNN Imputation)")
+            print("2. K-Means Clustering (Multivariable Adaptive)")
+            print("3. Back to main menu")
+            
+            option = input("Choose an ML algorithm: ").strip()
+
+            if option == "0":
+                path = self.select_file("notebook")
+                if path:
+                    print(f"Analyzing structure of: {path}")
+                    extracted_df = ModelManager.extract_dataframe_from_notebook(path)
+                    if extracted_df is not None:
+                        self.dataset = extracted_df
+                        self.source_type = "extracted_ipynb"
+                        print("Dataset loaded successfully in the models module.")
+                else:
+                    print("No file selected.")
+
+            elif option == "1":
+                if self.dataset is None:
+                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    continue
+                print("Running KNN classification imputation...")
+                imuted_df, metrics, best_k = ModelManager.knn_classification_imputation(
+                    self.dataset, target_column="target", k_values=[3, 5, 7]
+                )
+                print(f"Best k: {best_k}")
+                print(f"Metrics: {metrics}")
+                self.dataset = imuted_df
+                print("KNN imputation completed.")
+
+            elif option == "2":
+                if self.dataset is None:
+                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    continue
+                print("\nRunning clustering analysis (K-Means)...")
+                
+                res_df, f_metrics, f_clusters, f_centroids, X_raw, b_labels = ModelManager.run_kmeans_clustering(self.dataset)
+                
+                if res_df is not None:
+                    self.dataset = res_df
+                    print("\nColumn 'Cluster_Asignado' has been added to your current dataset.")
+                    
+                    print("\n--- Save Cluster Distribution Chart ---")
+                    self.manage_chart_flow(f_clusters, "Clustering_Spatial_Projections.png")
+                    
+                    print("\n--- Save Metrics Chart (Inertia/Silhouette/Calinski/Davies) ---")
+                    self.manage_chart_flow(f_metrics, "Clustering_Validation_Criteria_Metrics.png")
+
+                    print("\n--- Save Centroids Architectural Topology Chart ---")
+                    self.manage_chart_flow(f_centroids, "Clustering_Structural_Centroids_Heatmap.png")
+                    
+                    if X_raw.ndim == 2 and X_raw.shape[1] == 784:
+                        print("\n[MNIST DETECTED] Generating representative digits grid...")
+                        unique_clusters = np.unique(b_labels)
+                        n_rows = len(unique_clusters)
+                        n_examples = 10
+                        
+                        fig_exemplars, axes = plt.subplots(n_rows, n_examples, figsize=(1.4 * n_examples, 1.6 * n_rows))
+                        if n_rows == 1: axes = np.array([axes])
+                            
+                        for r_idx, c_id in enumerate(unique_clusters):
+                            pool = np.where(b_labels == c_id)[0]
+                            if len(pool) == 0: continue
+                            selected_drawings = np.random.choice(pool, size=min(n_examples, len(pool)), replace=False)
+                            
+                            for c_idx in range(n_examples):
+                                ax = axes[r_idx, c_idx]
+                                if c_idx < len(selected_drawings):
+                                    ax.imshow(X_raw[selected_drawings[c_idx]].reshape(28, 28), cmap='gray_r')
+                                    ax.axis('off')
+                                else:
+                                    ax.axis('off')
+                            axes[r_idx, 0].set_ylabel(f'Cluster {c_id}', rotation=0, labelpad=30, fontsize=10, va='center')
+                            
+                        fig_exemplars.suptitle('Algorithmic Cluster Representative Exemplars Output Grid', y=1.02, fontsize=12)
+                        fig_exemplars.tight_layout()
+                        self.manage_chart_flow(fig_exemplars, "Cluster_Representative_Image_Exemplars.png")
+
+            elif option == "3":
+                break
+            else:             
+                print("Invalid option.")
 
     def visualize_data(self):
         if self.dataset is None:
@@ -553,74 +487,49 @@ class DataApp:
 
             option = input("Choose a chart type: ").strip()
 
-            numeric_columns = self.dataset.select_dtypes(
-                include=["number"]
-            ).columns.tolist()
+            numeric_columns = self.dataset.select_dtypes(include=["number"]).columns.tolist()
             all_columns = self.dataset.columns.tolist()
 
             if option == "1":
                 print("\nNumeric columns:")
                 print(numeric_columns)
-
                 column = input("Choose a numeric column: ").strip()
-
                 if column in numeric_columns:
                     fig = plt.figure(figsize=(8, 5))
-                    plt.hist(
-                        self.dataset[column].dropna(),
-                        bins=10,
-                        edgecolor="black",
-                    )
+                    plt.hist(self.dataset[column].dropna(), bins=10, edgecolor="black")
                     plt.title(f"Histogram of {column}")
                     plt.xlabel(column)
                     plt.ylabel("Frequency")
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"Histogram_{column}.png")
                 else:
                     print("Invalid numeric column.")
 
             elif option == "2":
                 print("\nColumns:")
                 print(all_columns)
-
                 column = input("Choose a column: ").strip()
-
                 if column in all_columns:
                     fig = plt.figure(figsize=(8, 5))
-                    self.dataset[column].value_counts().head(10).plot(
-                        kind="bar"
-                    )
+                    self.dataset[column].value_counts().head(10).plot(kind="bar")
                     plt.title(f"Bar chart of {column}")
                     plt.xlabel(column)
                     plt.ylabel("Frequency")
                     plt.xticks(rotation=45)
                     plt.tight_layout()
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"BarChart_{column}.png")
                 else:
                     print("Invalid column.")
 
             elif option == "3":
                 print("\nColumns:")
                 print(all_columns)
-
                 column = input("Choose a column: ").strip()
-
                 if column in all_columns:
                     fig = plt.figure(figsize=(8, 8))
-                    self.dataset[column].value_counts().head(10).plot(
-                        kind="pie", autopct="%1.1f%%"
-                    )
+                    self.dataset[column].value_counts().head(10).plot(kind="pie", autopct="%1.1f%%")
                     plt.title(f"Pie chart of {column}")
                     plt.ylabel("")
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"PieChart_{column}.png")
                 else:
                     print("Invalid column.")
 
@@ -628,62 +537,44 @@ class DataApp:
                 if len(numeric_columns) < 2:
                     print("At least two numeric columns are required.")
                     continue
-
                 print("\nNumeric columns:")
                 print(numeric_columns)
-
                 x_column = input("Choose X column: ").strip()
                 y_column = input("Choose Y column: ").strip()
-
                 if x_column in numeric_columns and y_column in numeric_columns:
                     fig = plt.figure(figsize=(8, 5))
                     plt.scatter(self.dataset[x_column], self.dataset[y_column])
                     plt.title(f"Scatter plot: {x_column} vs {y_column}")
                     plt.xlabel(x_column)
                     plt.ylabel(y_column)
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"Scatter_{x_column}_vs_{y_column}.png")
                 else:
                     print("Both columns must be numeric.")
 
             elif option == "5":
                 print("\nNumeric columns:")
                 print(numeric_columns)
-
                 column = input("Choose a numeric column: ").strip()
-
                 if column in numeric_columns:
                     fig = plt.figure(figsize=(8, 5))
-                    self.dataset[column].reset_index(drop=True).plot(
-                        kind="line"
-                    )
+                    self.dataset[column].reset_index(drop=True).plot(kind="line")
                     plt.title(f"Line chart of {column}")
                     plt.xlabel("Index")
                     plt.ylabel(column)
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"LineChart_{column}.png")
                 else:
                     print("Invalid numeric column.")
 
             elif option == "6":
                 print("\nNumeric columns:")
                 print(numeric_columns)
-
                 column = input("Choose a numeric column: ").strip()
-
                 if column in numeric_columns:
                     fig = plt.figure(figsize=(8, 5))
                     sns.boxplot(y=self.dataset[column])
                     plt.title(f"Boxplot of {column}")
                     plt.ylabel(column)
-
-                    plt.show()
-                    self.ask_save_plot_after_close(fig)
-                    plt.close(fig)
+                    self.manage_chart_flow(fig, f"Boxplot_{column}.png")
                 else:
                     print("Invalid numeric column.")
 
@@ -691,16 +582,11 @@ class DataApp:
                 if len(numeric_columns) < 2:
                     print("At least two numeric columns are required.")
                     continue
-
                 corr = self.dataset[numeric_columns].corr()
-
                 fig = plt.figure(figsize=(10, 8))
                 sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
                 plt.title("Correlation Heatmap")
-
-                plt.show()
-                self.ask_save_plot_after_close(fig)
-                plt.close(fig)
+                self.manage_chart_flow(fig, "Global_Correlation_Heatmap.png")
 
             elif option == "8":
                 break
@@ -711,13 +597,10 @@ class DataApp:
         if self.source_type != "sql":
             print("The current source is not an SQL database.")
             return
-
         if not self.sql_tables:
             print("No SQL tables available.")
             return
-
         print("\nSQL tables:")
         for i, table in enumerate(self.sql_tables, start=1):
             print(f"{i}. {table}")
-
         input("\nPress Enter to continue...")

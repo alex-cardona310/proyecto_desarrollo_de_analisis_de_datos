@@ -10,12 +10,12 @@ import model_manager
 from model_manager import ModelManager
 
 try:
-    from app.cleaning.cleaner import Cleaner
+    from cleaning.cleaner import Cleaner
 except ImportError:
     Cleaner = None
 
 try:
-    from app.scraping.web_scraper import WebScraper
+    from scraping.web_scraper import WebScraper
 except ImportError:
     WebScraper = None
 
@@ -406,13 +406,41 @@ class DataApp:
                 if self.dataset is None:
                     print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
                     continue
+
                 print("Running KNN classification imputation...")
-                imuted_df, metrics, best_k = ModelManager.knn_classification_imputation(
-                    self.dataset, target_column="target", k_values=[3, 5, 7]
+
+                # Ask user for target column
+                target_column = input(
+                    "Enter the column to impute (column containing missing values): "
+                ).strip()
+
+                if target_column not in self.dataset.columns:
+                    print("Error: Invalid column name.")
+                    continue
+
+                # Ask user for k values
+                try:
+                    k_input = input(
+                        "Enter k values separated by commas (e.g. 3,5,7,9): "
+                    ).strip()
+
+                    k_values = [int(k.strip()) for k in k_input.split(",")]
+
+                except ValueError:
+                    print("Error: k values must be integers.")
+                    continue
+
+                imputed_df, best_k, metrics = ModelManager.run_knn_imputation(
+                    self.dataset,
+                    target_column=target_column,
+                    k_values=k_values
                 )
+
                 print(f"Best k: {best_k}")
-                print(f"Metrics: {metrics}")
-                self.dataset = imuted_df
+                print("\nMetrics:")
+                print(metrics)
+
+                self.dataset = imputed_df
                 print("KNN imputation completed.")
 
             elif option == "2":

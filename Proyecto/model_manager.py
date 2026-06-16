@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import io
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
@@ -198,11 +200,153 @@ class ModelManager:
         return df_output, fig_metrics, fig_clusters, fig_centroids, X_values, best_labels
 
     @staticmethod
-    def knn_classification_imputation(df, target_column="target", k_values=[3, 5, 7]):
-        print("[INFO] Initializing KNN classification context simulation...")
-        df_imputed = df.copy()
-        if target_column not in df_imputed.columns:
-            df_imputed[target_column] = np.random.choice([0, 1], size=len(df_imputed))
-        metrics = {"accuracy": 0.85}
-        best_k = k_values[0]
-        return df_imputed, metrics, best_k
+    def run_knn_imputation(df, target_column, k_values=[3,5,7,9]):
+        
+        print("\n--- Starting Adaptive k-NN Imputation Pipeline ---")
+
+        if target_column not in df.columns:
+            print(f"[ERROR] Column '{target_column}' not found.")
+            return None, None, None
+
+        if df[target_column].isna().sum() == 0:
+            print("[INFO] No missing values detected.")
+            return df.copy(), None, None
+
+        df_work = df.copy()
+
+        # Separate known and unknown rows
+        train_df = df_work[df_work[target_column].notna()].copy()
+        predict_df = df_work[df_work[target_column].isna()].copy()
+
+        if len(train_df) < 5:
+            print("[ERROR] Not enough known observations.")
+            return None, None, None
+
+        # Features
+        X_train = train_df.drop(columns=[target_column])
+        X_predict = predict_df.drop(columns=[target_column])
+
+        # One-hot encode features
+        X_all = pd.concat([X_train, X_predict], axis=0)
+        X_all = pd.get_dummies(X_all, drop_first=False)
+
+        X_train = X_all.iloc[:len(X_train)]
+        X_predict = X_all.iloc[len(X_train):]
+
+        X_train = X_train.fillna(X_train.median(numeric_only=True))
+        X_predict = X_predict.fillna(X_train.median(numeric_only=True))
+
+        # Determine target type
+        target_is_numeric = pd.api.types.is_numeric_dtype(train_df[target_column])
+
+        results = []
+
+        if target_is_numeric:
+
+            y_train = train_df[target_column]
+
+            print("[INFO] Numerical target detected.")
+            print("[INFO] Using KNeighborsRegressor.")
+
+            best_score = -np.inf
+            best_model = None
+            best_k = None
+
+            for k in k_values:
+
+                if k >= len(X_train):
+                    continue
+
+                model = KNeighborsRegressor(n_neighbors=k)
+
+                scores = cross_val_score(
+                    model,
+                    X_train,
+                    y_train,
+                    cv=5,
+                    scoring='neg_mean_squared_error'
+                )
+
+                mean_score = scores.mean()
+
+                results.append({
+                    "k": k,
+                    "cv_score": mean_score
+                })
+
+                if mean_score > best_score:
+                    best_score = mean_score
+                    best_model = model
+                    best_k = k
+
+        else:
+
+            encoder = LabelEncoder()
+
+            y_train = encoder.fit_transform(
+                train_df[target_column].astype(str)
+            )
+
+            print("[INFO] Categorical target detected.")
+            print("[INFO] Using KNeighborsClassifier.")
+
+            best_score = -np.inf
+            best_model = None
+            best_k = None
+
+            for k in k_values:
+
+                if k >= len(X_train):
+                    continue
+
+                model = KNeighborsClassifier(n_neighbors=k)
+
+                scores = cross_val_score(
+                    model,
+                    X_train,
+                    y_train,
+                    cv=5,
+                    scoring='accuracy'
+                )
+
+                mean_score = scores.mean()
+
+                results.append({
+                    "k": k,
+                    "cv_score": mean_score
+                })
+
+            if mean_score > best_score:
+                best_score = mean_score
+                best_model = model
+                best_k = k
+
+        evaluation_df = pd.DataFrame(results)
+
+        print("\n===== KNN MODEL EVALUATION =====")
+        print(evaluation_df.to_string(index=False))
+
+        print(f"\n[SYSTEM] Best k selected: {best_k}")
+
+        # Train final model
+        best_model.fit(X_train, y_train)
+
+        predictions = best_model.predict(X_predict)
+
+        if not target_is_numeric:
+            predictions = encoder.inverse_transform(
+                predictions.astype(int)
+            )
+
+        # Fill missing values
+        df_work.loc[
+            df_work[target_column].isna(),
+            target_column
+        ] = predictions
+
+        print(
+            f"[SUCCESS] {len(predictions)} missing values imputed "
+            f"in column '{target_column}'."
+        )
+
+        return df_work, best_k, evaluation_df

@@ -6,8 +6,8 @@ import json
 import io
 from sklearn.model_selection import cross_val_score
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
@@ -41,6 +41,7 @@ class ModelManager:
     @staticmethod
     def run_kmeans_clustering(df):
         print("\n--- Starting Adaptive K-Means Clustering Pipeline ---")
+        plt.ioff() # Mantener apagado el modo interactivo global
 
         # 1. DYNAMIC PREPROCESSING & TYPE PROTECTION
         num_cols = df.select_dtypes(include=['number']).columns.tolist()
@@ -48,7 +49,7 @@ class ModelManager:
 
         if not num_cols and not cat_cols:
             print("[ERROR] The active dataset does not contain valid features for analysis.")
-            return None, None, None, None, None, None
+            return None
 
         print(f"[INFO] Numerical features detected: {num_cols}")
         print(f"[INFO] Categorical features detected: {cat_cols}")
@@ -64,7 +65,7 @@ class ModelManager:
 
         if X_values.shape[0] < 3:
             print("[ERROR] Insufficient matrix records to evaluate structural clusters.")
-            return None, None, None, None, None, None
+            return None
 
         # 2. FEATURE SCALING
         scaler = StandardScaler()
@@ -120,31 +121,7 @@ class ModelManager:
 
         results_df = pd.DataFrame(results)
 
-        # 5. DASHBOARD GENERATION
-        fig_metrics, axes = plt.subplots(2, 2, figsize=(13, 9))
-        sns.set_theme(style='whitegrid')
-
-        sns.lineplot(data=results_df, x='k', y='inercia_intra_cluster', marker='o', ax=axes[0, 0], color='royalblue')
-        axes[0, 0].set_title('Within-Cluster Inertia (Lower is better)')
-        axes[0, 0].set_ylabel('Inertia')
-
-        sns.lineplot(data=results_df, x='k', y='silhouette_intra_inter', marker='o', ax=axes[0, 1], color='darkorange')
-        axes[0, 1].set_title('Silhouette Coefficient (Higher is better)')
-        axes[0, 1].set_ylabel('Silhouette Score')
-
-        sns.lineplot(data=results_df, x='k', y='calinski_harabasz_inter_intra', marker='o', ax=axes[1, 0], color='forestgreen')
-        axes[1, 0].set_title('Calinski-Harabasz Index (Higher is better)')
-        axes[1, 0].set_ylabel('Calinski-Harabasz Score')
-
-        sns.lineplot(data=results_df, x='k', y='davies_bouldin_intra_inter', marker='o', ax=axes[1, 1], color='crimson')
-        axes[1, 1].set_title('Davies-Bouldin Index (Lower is better)')
-        axes[1, 1].set_ylabel('Davies-Bouldin Score')
-
-        for ax in axes.flat:
-            ax.set_xlabel('Number of Clusters (k)')
-        fig_metrics.tight_layout()
-
-        # 6. AUTOMATED RANKING CRITERIA SYSTEM FOR BEST K
+        # 5. AUTOMATED RANKING CRITERIA SYSTEM FOR BEST K
         ranking_df = results_df.copy()
         ranking_df['rank_silhouette'] = ranking_df['silhouette_intra_inter'].rank(ascending=False)
         ranking_df['rank_calinski'] = ranking_df['calinski_harabasz_inter_intra'].rank(ascending=False)
@@ -159,25 +136,7 @@ class ModelManager:
         print(f"\n[SYSTEM] Optimal Model Selection: K={best_k} suggested based on structural ranking metrics.")
         print(ranking_df[['k', 'silhouette_intra_inter', 'calinski_harabasz_inter_intra', 'davies_bouldin_intra_inter', 'rank_promedio']].to_string(index=False))
 
-        # Chart 2: Spatial Cluster Scatter Mapping
-        fig_clusters = plt.figure(figsize=(9, 6))
-        scatter = plt.scatter(X_2d[:, 0], X_2d[:, 1], c=best_labels, cmap='tab20', s=20, alpha=0.8)
-        plt.colorbar(scatter, label='Assigned Cluster ID')
-        plt.title(f'Spatial Clustering Representation (K-means partitions with k={best_k})')
-        plt.xlabel('Principal Component 1')
-        plt.ylabel('Principal Component 2')
-        fig_clusters.tight_layout()
-
-        # Chart 3: Centroid Structural Heatmap
-        fig_centroids = plt.figure(figsize=(11, 6))
-        centroids_df = pd.DataFrame(best_model.cluster_centers_)
-        sns.heatmap(centroids_df, cmap='viridis', cbar=True)
-        plt.title(f'Cluster Centroid Structural Heatmap Topology (k={best_k})')
-        plt.xlabel('Dimensional Feature Index')
-        plt.ylabel('Cluster ID')
-        fig_centroids.tight_layout()
-
-        # 7. LOG DISTRIBUTION DATA TO WORKSPACE FILING
+        # 6. LOG DISTRIBUTION DATA TO WORKSPACE FILING
         df_output = df.copy()
         df_output['Cluster_Asignado'] = best_labels
 
@@ -197,11 +156,20 @@ class ModelManager:
         print("\n[SUCCESS] Pipeline metrics saved to: resultado_clustering.csv")
         print("[SUCCESS] Comprehensive text report compiled at: reporte_clustering.txt")
 
-        return df_output, fig_metrics, fig_clusters, fig_centroids, X_values, best_labels
+        # Retornamos un diccionario con los datos limpios para que main.py construya los plots secuencialmente
+        payload = {
+            "df_output": df_output,
+            "results_df": results_df,
+            "X_2d": X_2d,
+            "best_labels": best_labels,
+            "best_k": best_k,
+            "cluster_centers": best_model.cluster_centers_,
+            "X_values": X_values
+        }
+        return payload
 
     @staticmethod
     def run_knn_imputation(df, target_column, k_values=[3,5,7,9]):
-        
         print("\n--- Starting Adaptive k-NN Imputation Pipeline ---")
 
         if target_column not in df.columns:
@@ -242,7 +210,6 @@ class ModelManager:
         results = []
 
         if target_is_numeric:
-
             y_train = train_df[target_column]
 
             print("[INFO] Numerical target detected.")
@@ -253,12 +220,10 @@ class ModelManager:
             best_k = None
 
             for k in k_values:
-
                 if k >= len(X_train):
                     continue
 
                 model = KNeighborsRegressor(n_neighbors=k)
-
                 scores = cross_val_score(
                     model,
                     X_train,
@@ -268,7 +233,6 @@ class ModelManager:
                 )
 
                 mean_score = scores.mean()
-
                 results.append({
                     "k": k,
                     "cv_score": mean_score
@@ -280,9 +244,7 @@ class ModelManager:
                     best_k = k
 
         else:
-
             encoder = LabelEncoder()
-
             y_train = encoder.fit_transform(
                 train_df[target_column].astype(str)
             )
@@ -295,12 +257,10 @@ class ModelManager:
             best_k = None
 
             for k in k_values:
-
                 if k >= len(X_train):
                     continue
 
                 model = KNeighborsClassifier(n_neighbors=k)
-
                 scores = cross_val_score(
                     model,
                     X_train,
@@ -310,16 +270,15 @@ class ModelManager:
                 )
 
                 mean_score = scores.mean()
-
                 results.append({
                     "k": k,
                     "cv_score": mean_score
                 })
 
-            if mean_score > best_score:
-                best_score = mean_score
-                best_model = model
-                best_k = k
+                if mean_score > best_score:
+                    best_score = mean_score
+                    best_model = model
+                    best_k = k
 
         evaluation_df = pd.DataFrame(results)
 
@@ -330,7 +289,6 @@ class ModelManager:
 
         # Train final model
         best_model.fit(X_train, y_train)
-
         predictions = best_model.predict(X_predict)
 
         if not target_is_numeric:
@@ -339,14 +297,8 @@ class ModelManager:
             )
 
         # Fill missing values
-        df_work.loc[
-            df_work[target_column].isna(),
-            target_column
-        ] = predictions
+        df_work.loc[df_work[target_column].isna(), target_column] = predictions
 
-        print(
-            f"[SUCCESS] {len(predictions)} missing values imputed "
-            f"in column '{target_column}'."
-        )
+        print(f"[SUCCESS] {len(predictions)} missing values imputed in column '{target_column}'.")
 
         return df_work, best_k, evaluation_df

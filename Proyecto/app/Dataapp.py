@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import numpy as np
-import model_manager
-
 from model_manager import ModelManager
 
 try:
@@ -38,7 +36,7 @@ class DataApp:
 
     def run(self):
         print("==================================================")
-        print("          DATA ANALYSIS PIPELINE MODULE           ")
+        print("          DATA ANALYSIS                           ")
         print("==================================================")
         self.load_source()
 
@@ -91,26 +89,74 @@ class DataApp:
         print("9. Models")
         print("10. Exit")
 
-    def manage_chart_flow(self, fig, default_filename):
-        plt.show()
-        print(f"\n--- Chart Options: {default_filename} ---")
+    def manage_chart_flow(self, fig, filename):
+        """
+        Muestra la gráfica de forma bloqueante y aislada, garantizando que 
+        ninguna otra ventana en memoria se abra al mismo tiempo.
+        """
+        if fig is None:
+            print(f"[WARNING] No chart data available for {filename}")
+            return
+
+        print(f"\n[INFO] Opening visualization window for: {filename}")
+        print("--> IMPORTANT: Close the graphical chart window manually to return to terminal options.")
+
+        # --- SOLUCIÓN DE AISLAMIENTO TOTAL ---
+        # 1. Creamos una nueva figura limpia temporal copia de la estructura original
+        # Esto rompe el link con el buffer global acumulado en ModelManager
+        fig_single = plt.figure(figsize=fig.get_size_inches())
+        
+        # 2. Clonamos el diseño de los ejes y el contenido al nuevo lienzo aislado
+        for ax in fig.axes:
+            # Re-localizamos los subplots en la nueva figura independiente
+            pos = ax.get_position()
+            ax_new = fig_single.add_axes(pos)
+            
+            # Transferimos los elementos gráficos (líneas, scatter, colecciones)
+            for line in ax.lines:
+                ax_new.add_line(plt.Line2D(line.get_xdata(), line.get_ydata(), **line.properties()))
+            for collection in ax.collections:
+                ax_new.add_collection(collection)
+            for patch in ax.patches:
+                ax_new.add_patch(patch)
+            for text in ax.texts:
+                ax_new.text(text.get_position()[0], text.get_position()[1], text.get_text(), **text.properties())
+                
+            # Clonamos títulos y etiquetas de los ejes
+            ax_new.set_title(ax.get_title())
+            ax_new.set_xlabel(ax.get_xlabel())
+            ax_new.set_ylabel(ax.get_ylabel())
+            ax_new.set_xlim(ax.get_xlim())
+            ax_new.set_ylim(ax.get_ylim())
+            
+        # Clonamos el título general si existe
+        if fig._suptitle:
+            fig_single.suptitle(fig._suptitle.get_text(), fontsize=fig._suptitle.get_fontsize())
+
+        fig_single.tight_layout()
+
+        # 3. Mostramos ÚNICAMENTE esta figura temporal e independiente
+        plt.show(block=True) 
+
+        # La terminal se congela aquí. Al dar clic en la X de la ventana, continúa abajo:
+        print(f"\n--- Chart Options: {filename} ---")
         print("1. Save chart to disk layout location")
         print("2. Close chart window and clear buffer memory")
         
         while True:
-            choice = input("Select operation (1-2): ").strip()
-            if choice == '1':
-                if not os.path.exists(self.save_directory):
-                    os.makedirs(self.save_directory, exist_ok=True)
-                full_path = os.path.join(self.save_directory, default_filename)
-                fig.savefig(full_path, bbox_inches='tight', dpi=300)
-                print(f"[SUCCESS] Chart saved to disk path layout: {full_path}")
+            opcion = input("Select operation (1-2): ").strip()
+            if opcion == "1":
+                fig_single.savefig(filename, bbox_inches='tight')
+                print(f"[SUCCESS] Chart successfully saved to disk as '{filename}'.")
                 break
-            elif choice == '2':
+            elif opcion == "2":
                 print("Visualization context dismissed without updates.")
                 break
             else:
-                print("Invalid entry selection. Provide 1 or 2.")
+                print("Invalid choice. Please select 1 or 2.")
+
+        # 4. Destruimos por completo la figura de la memoria antes de pasar a la siguiente iteración
+        plt.close(fig_single)
         plt.close(fig)
 
     def select_file(self, file_type):
@@ -449,32 +495,93 @@ class DataApp:
                     continue
                 print("\nRunning clustering analysis (K-Means)...")
                 
-                res_df, f_metrics, f_clusters, f_centroids, X_raw, b_labels = ModelManager.run_kmeans_clustering(self.dataset)
+                # Obtenemos los datos calculados
+                cluster_data = ModelManager.run_kmeans_clustering(self.dataset)
                 
-                if res_df is not None:
-                    self.dataset = res_df
+                if cluster_data is not None:
+                    self.dataset = cluster_data["df_output"]
                     print("\nColumn 'Cluster_Asignado' has been added to your current dataset.")
                     
-                    print("\n--- Save Cluster Distribution Chart ---")
-                    self.manage_chart_flow(f_clusters, "Clustering_Spatial_Projections.png")
+                    # -------------------------------------------------------------
+                    # GRÁFICA 1: METRICAS DE EVALUACIÓN
+                    # -------------------------------------------------------------
+                    print("\n--- Process Metrics Chart (Inertia/Silhouette/Calinski/Davies) ---")
+                    fig1, axes = plt.subplots(2, 2, figsize=(13, 9))
+                    sns.set_theme(style='whitegrid')
                     
-                    print("\n--- Save Metrics Chart (Inertia/Silhouette/Calinski/Davies) ---")
-                    self.manage_chart_flow(f_metrics, "Clustering_Validation_Criteria_Metrics.png")
+                    sns.lineplot(data=cluster_data["results_df"], x='k', y='inercia_intra_cluster', marker='o', ax=axes[0, 0], color='royalblue')
+                    axes[0, 0].set_title('Within-Cluster Inertia (Lower is better)')
+                    axes[0, 0].set_ylabel('Inertia')
 
-                    print("\n--- Save Centroids Architectural Topology Chart ---")
-                    self.manage_chart_flow(f_centroids, "Clustering_Structural_Centroids_Heatmap.png")
+                    sns.lineplot(data=cluster_data["results_df"], x='k', y='silhouette_intra_inter', marker='o', ax=axes[0, 1], color='darkorange')
+                    axes[0, 1].set_title('Silhouette Coefficient (Higher is better)')
+                    axes[0, 1].set_ylabel('Silhouette Score')
+
+                    sns.lineplot(data=cluster_data["results_df"], x='k', y='calinski_harabasz_inter_intra', marker='o', ax=axes[1, 0], color='forestgreen')
+                    axes[1, 0].set_title('Calinski-Harabasz Index (Higher is better)')
+                    axes[1, 0].set_ylabel('Calinski-Harabasz Score')
+
+                    sns.lineplot(data=cluster_data["results_df"], x='k', y='davies_bouldin_intra_inter', marker='o', ax=axes[1, 1], color='crimson')
+                    axes[1, 1].set_title('Davies-Bouldin Index (Lower is better)')
+                    axes[1, 1].set_ylabel('Davies-Bouldin Score')
+
+                    for ax in axes.flat:
+                        ax.set_xlabel('Number of Clusters (k)')
+                    fig1.tight_layout()
                     
-                    if X_raw.ndim == 2 and X_raw.shape[1] == 784:
-                        print("\n[MNIST DETECTED] Generating representative digits grid...")
-                        unique_clusters = np.unique(b_labels)
+                    # Se muestra, se gestiona y se destruye antes de crear la siguiente
+                    self.manage_chart_flow(fig1, "Clustering_Validation_Criteria_Metrics.png")
+                    
+                    # -------------------------------------------------------------
+                    # GRÁFICA 2: DISTRIBUCIÓN ESPACIAL DE CLUSTERS
+                    # -------------------------------------------------------------
+                    print("\n--- Process Cluster Distribution Chart ---")
+                    fig2, ax_clusters = plt.subplots(figsize=(9, 6))
+                    scatter = ax_clusters.scatter(
+                        cluster_data["X_2d"][:, 0], 
+                        cluster_data["X_2d"][:, 1], 
+                        c=cluster_data["best_labels"], 
+                        cmap='tab20', s=20, alpha=0.8
+                    )
+                    fig2.colorbar(scatter, ax=ax_clusters, label='Assigned Cluster ID')
+                    ax_clusters.set_title(f'Spatial Clustering Representation (K-means partitions with k={cluster_data["best_k"]})')
+                    ax_clusters.set_xlabel('Principal Component 1')
+                    ax_clusters.set_ylabel('Principal Component 2')
+                    fig2.tight_layout()
+                    
+                    # Se muestra, se gestiona y se destruye antes de crear la siguiente
+                    self.manage_chart_flow(fig2, "Clustering_Spatial_Projections.png")
+                    
+                    # -------------------------------------------------------------
+                    # GRÁFICA 3: HEATMAP DE CENTROIDES
+                    # -------------------------------------------------------------
+                    print("\n--- Process Centroids Architectural Topology Chart ---")
+                    fig3, ax_centroids = plt.subplots(figsize=(11, 6))
+                    centroids_df = pd.DataFrame(cluster_data["cluster_centers"])
+                    sns.heatmap(centroids_df, cmap='viridis', cbar=True, ax=ax_centroids)
+                    ax_centroids.set_title(f'Cluster Centroid Structural Heatmap Topology (k={cluster_data["best_k"]})')
+                    ax_centroids.set_xlabel('Dimensional Feature Index')
+                    ax_centroids.set_ylabel('Cluster ID')
+                    fig3.tight_layout()
+                    
+                    # Se muestra, se gestiona y se destruye antes de crear la siguiente
+                    self.manage_chart_flow(fig3, "Clustering_Structural_Centroids_Heatmap.png")
+                    
+                    # -------------------------------------------------------------
+                    # GRÁFICA 4: CASO EXCEPCIONAL MNIST
+                    # -------------------------------------------------------------
+                    X_raw = cluster_data["X_values"]
+                    if X_raw is not None and X_raw.ndim == 2 and X_raw.shape[1] == 784:
+                        print("\n[MNIST DETECTED] Preparing representative digits grid...")
+                        unique_clusters = np.unique(cluster_data["best_labels"])
                         n_rows = len(unique_clusters)
                         n_examples = 10
                         
-                        fig_exemplars, axes = plt.subplots(n_rows, n_examples, figsize=(1.4 * n_examples, 1.6 * n_rows))
+                        fig4, axes = plt.subplots(n_rows, n_examples, figsize=(1.4 * n_examples, 1.6 * n_rows))
                         if n_rows == 1: axes = np.array([axes])
                             
                         for r_idx, c_id in enumerate(unique_clusters):
-                            pool = np.where(b_labels == c_id)[0]
+                            pool = np.where(cluster_data["best_labels"] == c_id)[0]
                             if len(pool) == 0: continue
                             selected_drawings = np.random.choice(pool, size=min(n_examples, len(pool)), replace=False)
                             
@@ -487,14 +594,51 @@ class DataApp:
                                     ax.axis('off')
                             axes[r_idx, 0].set_ylabel(f'Cluster {c_id}', rotation=0, labelpad=30, fontsize=10, va='center')
                             
-                        fig_exemplars.suptitle('Algorithmic Cluster Representative Exemplars Output Grid', y=1.02, fontsize=12)
-                        fig_exemplars.tight_layout()
-                        self.manage_chart_flow(fig_exemplars, "Cluster_Representative_Image_Exemplars.png")
+                        fig4.suptitle('Algorithmic Cluster Representative Exemplars Output Grid', y=1.02, fontsize=12)
+                        fig4.tight_layout()
+                        
+                        print("\n--- Process MNIST Representative Exemplars Chart ---")
+                        self.manage_chart_flow(fig4, "Cluster_Representative_Image_Exemplars.png")
 
             elif option == "3":
                 break
             else:             
                 print("Invalid option.")
+
+    def manage_chart_flow(self, fig, filename):
+        """
+        Muestra la figura de forma síncrona y bloqueante. 
+        Al cerrarla, pregunta si guardar y limpia la memoria.
+        """
+        if fig is None:
+            print(f"[WARNING] No chart figure structure captured for {filename}.")
+            return
+
+        print(f"\n[INFO] Opening visualization window for: {filename}")
+        print("--> IMPORTANT: Close the graphical chart window manually to return to terminal options.")
+        
+        # Muestra la figura actual de forma exclusiva y congela la ejecución
+        plt.show() 
+
+        # El código se reanuda aquí tras dar clic en la 'X' de la gráfica
+        print(f"\n--- Chart Options: {filename} ---")
+        print("1. Save chart to disk layout location")
+        print("2. Close chart window and clear buffer memory")
+        
+        while True:
+            opcion = input("Select operation (1-2): ").strip()
+            if opcion == "1":
+                fig.savefig(filename, bbox_inches='tight')
+                print(f"[SUCCESS] Chart saved as '{filename}'.")
+                break
+            elif opcion == "2":
+                print("Visualization context dismissed without updates.")
+                break
+            else:
+                print("Invalid choice. Please choose 1 or 2.")
+        
+        # Destruye la figura actual de la memoria interna de Matplotlib
+        plt.close(fig)
 
     def visualize_data(self):
         if self.dataset is None:

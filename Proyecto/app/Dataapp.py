@@ -89,7 +89,7 @@ class DataApp:
         print("9. Models")
         print("10. Exit")
 
-    def manage_chart_flow(self, fig, filename):
+    def manage_chart_flow(self, fig, filename, ask_options=True):
         """
         Muestra la gráfica de forma bloqueante y aislada, garantizando que 
         ninguna otra ventana en memoria se abra al mismo tiempo.
@@ -139,6 +139,11 @@ class DataApp:
         plt.show(block=True) 
 
         # La terminal se congela aquí. Al dar clic en la X de la ventana, continúa abajo:
+        if not ask_options:
+            print(f"[INFO] Chart closed: {filename}")
+            plt.close(fig)
+            return
+
         print(f"\n--- Chart Options: {filename} ---")
         print("1. Save chart to disk layout location")
         print("2. Close chart window and clear buffer memory")
@@ -530,7 +535,7 @@ class DataApp:
                     fig1.tight_layout()
                     
                     # Se muestra, se gestiona y se destruye antes de crear la siguiente
-                    self.manage_chart_flow(fig1, "Clustering_Validation_Criteria_Metrics.png")
+                    self.manage_chart_flow(fig1, "Clustering_Validation_Criteria_Metrics.png", ask_options=False)
                     
                     # -------------------------------------------------------------
                     # GRÁFICA 2: DISTRIBUCIÓN ESPACIAL DE CLUSTERS
@@ -550,7 +555,7 @@ class DataApp:
                     fig2.tight_layout()
                     
                     # Se muestra, se gestiona y se destruye antes de crear la siguiente
-                    self.manage_chart_flow(fig2, "Clustering_Spatial_Projections.png")
+                    self.manage_chart_flow(fig2, "Clustering_Spatial_Projections.png", ask_options=False)
                     
                     # -------------------------------------------------------------
                     # GRÁFICA 3: HEATMAP DE CENTROIDES
@@ -565,7 +570,7 @@ class DataApp:
                     fig3.tight_layout()
                     
                     # Se muestra, se gestiona y se destruye antes de crear la siguiente
-                    self.manage_chart_flow(fig3, "Clustering_Structural_Centroids_Heatmap.png")
+                    self.manage_chart_flow(fig3, "Clustering_Structural_Centroids_Heatmap.png", ask_options=False)
                     
                     # -------------------------------------------------------------
                     # GRÁFICA 4: CASO EXCEPCIONAL MNIST
@@ -605,7 +610,7 @@ class DataApp:
             else:             
                 print("Invalid option.")
 
-    def manage_chart_flow(self, fig, filename):
+    def manage_chart_flow(self, fig, filename, ask_options=True):
         """
         Muestra la figura de forma síncrona y bloqueante. 
         Al cerrarla, pregunta si guardar y limpia la memoria.
@@ -618,7 +623,13 @@ class DataApp:
         print("--> IMPORTANT: Close the graphical chart window manually to return to terminal options.")
         
         # Muestra la figura actual de forma exclusiva y congela la ejecución
-        plt.show() 
+        plt.figure(fig.number)
+        plt.show(block=True) 
+
+        if not ask_options:
+            print(f"[INFO] Chart closed: {filename}")
+            plt.close(fig)
+            return
 
         # El código se reanuda aquí tras dar clic en la 'X' de la gráfica
         print(f"\n--- Chart Options: {filename} ---")

@@ -7,7 +7,7 @@ import seaborn as sns
 import numpy as np
 import model_manager
 
-from model_manager import ModelManager
+from analysis.model_manager import ModelManager
 
 try:
     from cleaning.cleaner import Cleaner
@@ -386,7 +386,8 @@ class DataApp:
             print("0. Import/Extract data from Jupyter Notebook (.ipynb)")
             print("1. K-Nearest Neighbors (KNN Imputation)")
             print("2. K-Means Clustering (Multivariable Adaptive)")
-            print("3. Back to main menu")
+            print("3. MICE Imputation (IterativeImputer)")
+            print("4. Back to main menu")
             
             option = input("Choose an ML algorithm: ").strip()
 
@@ -409,7 +410,6 @@ class DataApp:
 
                 print("Running KNN classification imputation...")
 
-                # Ask user for target column
                 target_column = input(
                     "Enter the column to impute (column containing missing values): "
                 ).strip()
@@ -418,19 +418,16 @@ class DataApp:
                     print("Error: Invalid column name.")
                     continue
 
-                # Ask user for k values
                 try:
                     k_input = input(
                         "Enter k values separated by commas (e.g. 3,5,7,9): "
                     ).strip()
-
                     k_values = [int(k.strip()) for k in k_input.split(",")]
-
                 except ValueError:
                     print("Error: k values must be integers.")
                     continue
 
-                imputed_df, best_k, metrics = ModelManager.run_knn_imputation(
+                imputed_df, metrics, best_k = ModelManager.knn_classification_imputation(
                     self.dataset,
                     target_column=target_column,
                     k_values=k_values
@@ -463,38 +460,27 @@ class DataApp:
 
                     print("\n--- Save Centroids Architectural Topology Chart ---")
                     self.manage_chart_flow(f_centroids, "Clustering_Structural_Centroids_Heatmap.png")
-                    
-                    if X_raw.ndim == 2 and X_raw.shape[1] == 784:
-                        print("\n[MNIST DETECTED] Generating representative digits grid...")
-                        unique_clusters = np.unique(b_labels)
-                        n_rows = len(unique_clusters)
-                        n_examples = 10
-                        
-                        fig_exemplars, axes = plt.subplots(n_rows, n_examples, figsize=(1.4 * n_examples, 1.6 * n_rows))
-                        if n_rows == 1: axes = np.array([axes])
-                            
-                        for r_idx, c_id in enumerate(unique_clusters):
-                            pool = np.where(b_labels == c_id)[0]
-                            if len(pool) == 0: continue
-                            selected_drawings = np.random.choice(pool, size=min(n_examples, len(pool)), replace=False)
-                            
-                            for c_idx in range(n_examples):
-                                ax = axes[r_idx, c_idx]
-                                if c_idx < len(selected_drawings):
-                                    ax.imshow(X_raw[selected_drawings[c_idx]].reshape(28, 28), cmap='gray_r')
-                                    ax.axis('off')
-                                else:
-                                    ax.axis('off')
-                            axes[r_idx, 0].set_ylabel(f'Cluster {c_id}', rotation=0, labelpad=30, fontsize=10, va='center')
-                            
-                        fig_exemplars.suptitle('Algorithmic Cluster Representative Exemplars Output Grid', y=1.02, fontsize=12)
-                        fig_exemplars.tight_layout()
-                        self.manage_chart_flow(fig_exemplars, "Cluster_Representative_Image_Exemplars.png")
 
             elif option == "3":
+                if self.dataset is None:
+                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    continue
+
+                print("Running MICE imputation (IterativeImputer)...")
+                try:
+                    # Llama al método estático corregido
+                    imputed_df = ModelManager.mice_imputation(self.dataset)
+                    if imputed_df is not None:
+                        self.dataset = imputed_df
+                except Exception as e:
+                    print(f"Error running MICE imputation: {e}")
+
+
+            elif option == "4":
                 break
             else:             
                 print("Invalid option.")
+
 
     def visualize_data(self):
         if self.dataset is None:

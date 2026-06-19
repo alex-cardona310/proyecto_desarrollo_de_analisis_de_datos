@@ -27,6 +27,10 @@ except Exception:
 
 from tkinter import Tk, filedialog
 
+def clear_console():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
 class DataApp:
 
     def __init__(self):
@@ -45,6 +49,7 @@ class DataApp:
         while True:
             self.show_menu()
             option = input("Choose an option (1-10): ").strip()
+            clear_console()
 
             if option == "1":
                 self.preview_dataset()
@@ -99,6 +104,7 @@ class DataApp:
         
         while True:
             choice = input("Select operation (1-2): ").strip()
+            clear_console()
             if choice == '1':
                 if not os.path.exists(self.save_directory):
                     os.makedirs(self.save_directory, exist_ok=True)
@@ -141,6 +147,7 @@ class DataApp:
         print("3. Cloud-Mounted Remote SQL Database")
 
         option = input("Select input pipeline (1-3): ").strip()
+        clear_console()
 
         if option == "1":
             path = self.select_file("csv")
@@ -245,6 +252,7 @@ class DataApp:
             print("8. Back to main menu")
 
             option = input("Choose a cleaning option: ").strip()
+            clear_console()
 
             if option == "1":
                 if Cleaner is not None:
@@ -390,6 +398,7 @@ class DataApp:
             print("4. Back to main menu")
             
             option = input("Choose an ML algorithm: ").strip()
+            clear_console()
 
             if option == "0":
                 path = self.select_file("notebook")
@@ -500,6 +509,7 @@ class DataApp:
             print("8. Back to main menu")
 
             option = input("Choose a chart type: ").strip()
+            clear_console()
 
             numeric_columns = self.dataset.select_dtypes(include=["number"]).columns.tolist()
             all_columns = self.dataset.columns.tolist()

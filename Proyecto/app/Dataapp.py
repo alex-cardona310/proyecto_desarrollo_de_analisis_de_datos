@@ -124,7 +124,7 @@ class DataApp:
         root.withdraw()
         path = filedialog.askopenfilename(
             title=f"Select source {file_type.upper()} file",
-            filetypes=[(f"{file_type.upper()} files", f"*.{file_type}")] if file_type != "notebook" else [("Jupyter Notebooks", "*.ipynb")]
+            filetypes=[(f"{file_type.upper()} files", f"*.{file_type}")]
         )
         root.destroy()
         return path
@@ -391,7 +391,6 @@ class DataApp:
         while True:
             print("\nModeling")
             print("=" * 60)
-            print("0. Import/Extract data from Jupyter Notebook (.ipynb)")
             print("1. K-Nearest Neighbors (KNN Imputation)")
             print("2. K-Means Clustering (Multivariable Adaptive)")
             print("3. MICE Imputation (IterativeImputer)")
@@ -400,21 +399,9 @@ class DataApp:
             option = input("Choose an ML algorithm: ").strip()
             clear_console()
 
-            if option == "0":
-                path = self.select_file("notebook")
-                if path:
-                    print(f"Analyzing structure of: {path}")
-                    extracted_df = ModelManager.extract_dataframe_from_notebook(path)
-                    if extracted_df is not None:
-                        self.dataset = extracted_df
-                        self.source_type = "extracted_ipynb"
-                        print("Dataset loaded successfully in the models module.")
-                else:
-                    print("No file selected.")
-
-            elif option == "1":
+            if option == "1":
                 if self.dataset is None:
-                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    print("Error: No data loaded. Load a file in the main menu first.")
                     continue
 
                 print("Running KNN classification imputation...")
@@ -451,7 +438,7 @@ class DataApp:
 
             elif option == "2":
                 if self.dataset is None:
-                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    print("Error: No data loaded. Load a file in the main menu first.")
                     continue
                 print("\nRunning clustering analysis (K-Means)...")
                 
@@ -472,7 +459,7 @@ class DataApp:
 
             elif option == "3":
                 if self.dataset is None:
-                    print("Error: No data loaded. Use option 0 first or load a file in the main menu.")
+                    print("Error: No data loaded. Load a file in the main menu first.")
                     continue
 
                 print("Running MICE imputation (IterativeImputer)...")
@@ -481,26 +468,20 @@ class DataApp:
                     if imputed_df is not None:
                         self.dataset = imputed_df
                         
-                        # --- PREVISUALIZACIÓN DE LOS REGISTROS ---
                         print("\n[PREVIEW] Primeros registros del dataset modificado:")
                         print("-" * 70)
                         print(self.dataset.head())
                         print("-" * 70)
                         
-                        # --- GUARDADO AUTOMÁTICO EN LA CARPETA ADICIONALES ---
-                        # 1. Asegurar la existencia de la carpeta 'adicionales' un nivel arriba de Proyecto o en la raíz activa
                         target_dir = os.path.abspath(os.path.join(os.getcwd(), "adicionales"))
                         os.makedirs(target_dir, exist_ok=True)
                         
-                        # 2. Recuperar el nombre original del archivo cargado (usa uno por defecto si no se detecta)
                         orig_filename = getattr(self, 'current_filename', 'dataset.csv')
                         name_without_ext, ext = os.path.splitext(orig_filename)
                         
-                        # 3. Construir el nuevo nombre compuesto solicitado
                         new_filename = f"resultados_{name_without_ext}{ext}"
                         final_save_path = os.path.join(target_dir, new_filename)
                         
-                        # 4. Exportar el DataFrame limpio a la ruta destino
                         self.dataset.to_csv(final_save_path, index=False)
                         print(f"\n[SUCCESS] Archivo nuevo guardado automáticamente en:")
                         print(f" -> {final_save_path}")
@@ -509,7 +490,6 @@ class DataApp:
                         
                 except Exception as e:
                     print(f"Error running MICE imputation or saving file: {e}")
-
 
             elif option == "4":
                 break

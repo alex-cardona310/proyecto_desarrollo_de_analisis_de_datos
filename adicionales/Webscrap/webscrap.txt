@@ -1,0 +1,21 @@
+Url
+input:
+https://www.miniso.com.mx/miffy-productos
+
+Contenedor***
+input: 
+vtex-product-summary-2-x-element
+
+Columna1 Producto
+input: 
+span
+
+input: 
+vtex-product-summary-2-x-productBrand 
+
+Columna2 
+input:
+span
+
+input:
+vtex-product-summary-2-x-currencyInteger

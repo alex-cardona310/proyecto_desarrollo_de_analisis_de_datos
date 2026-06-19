@@ -477,12 +477,38 @@ class DataApp:
 
                 print("Running MICE imputation (IterativeImputer)...")
                 try:
-                    # Llama al método estático corregido
                     imputed_df = ModelManager.mice_imputation(self.dataset)
                     if imputed_df is not None:
                         self.dataset = imputed_df
+                        
+                        # --- PREVISUALIZACIÓN DE LOS REGISTROS ---
+                        print("\n[PREVIEW] Primeros registros del dataset modificado:")
+                        print("-" * 70)
+                        print(self.dataset.head())
+                        print("-" * 70)
+                        
+                        # --- GUARDADO AUTOMÁTICO EN LA CARPETA ADICIONALES ---
+                        # 1. Asegurar la existencia de la carpeta 'adicionales' un nivel arriba de Proyecto o en la raíz activa
+                        target_dir = os.path.abspath(os.path.join(os.getcwd(), "adicionales"))
+                        os.makedirs(target_dir, exist_ok=True)
+                        
+                        # 2. Recuperar el nombre original del archivo cargado (usa uno por defecto si no se detecta)
+                        orig_filename = getattr(self, 'current_filename', 'dataset.csv')
+                        name_without_ext, ext = os.path.splitext(orig_filename)
+                        
+                        # 3. Construir el nuevo nombre compuesto solicitado
+                        new_filename = f"resultados_{name_without_ext}{ext}"
+                        final_save_path = os.path.join(target_dir, new_filename)
+                        
+                        # 4. Exportar el DataFrame limpio a la ruta destino
+                        self.dataset.to_csv(final_save_path, index=False)
+                        print(f"\n[SUCCESS] Archivo nuevo guardado automáticamente en:")
+                        print(f" -> {final_save_path}")
+                        
+                        input("\nPresiona Enter para continuar...")
+                        
                 except Exception as e:
-                    print(f"Error running MICE imputation: {e}")
+                    print(f"Error running MICE imputation or saving file: {e}")
 
 
             elif option == "4":

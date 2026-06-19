@@ -106,19 +106,21 @@ class ModelManager:
     def mice_imputation(df, max_iter=10):
         """
         Imputación de valores faltantes usando MICE (IterativeImputer).
-        Soporta DataFrames con variables categóricas aplicando MICE solo a las numéricas.
+        Muestra un reporte comparativo del "Antes y Después" inmediatamente.
         """
         if df is None or df.empty:
             print("[ERROR] El DataFrame está vacío o no se ha cargado correctamente.")
             return None
 
-        if not df.isnull().values.any():
+        # Conteo de nulos iniciales por columna
+        nulls_before = df.isnull().sum()
+        total_nulls_before = nulls_before.sum()
+
+        if total_nulls_before == 0:
             print("[INFO] No hay valores faltantes para imputar.")
             return df
 
         data = df.copy()
-
-        # MICE solo funciona con datos numéricos. Identificamos columnas numéricas.
         numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
         
         if not numeric_cols:
@@ -126,20 +128,36 @@ class ModelManager:
             return data
 
         try:
-            print(f"[INFO] Aplicando MICE en las columnas numéricas: {numeric_cols}")
+            print(f"\n[INFO] Ejecutando MICE (IterativeImputer) en: {numeric_cols}")
             
-            # Inicializar y aplicar IterativeImputer solo a la matriz numérica
             imputer = IterativeImputer(max_iter=max_iter, random_state=42)
             imputed_array = imputer.fit_transform(data[numeric_cols])
             
-            # Reemplazar los valores numéricos imputados en el DataFrame copia
+            # Reemplazar valores calculados
             data[numeric_cols] = pd.DataFrame(imputed_array, columns=numeric_cols, index=data.index)
             
+            # Conteo de nulos final
+            nulls_after = data.isnull().sum()
+
+            # --- REPORTE DE PREVISUALIZACIÓN INMEDIATA ---
+            print("\n" + "="*50)
+            print("         REPORTE DE IMPUTACIÓN MICE (PREVIEW)       ")
+            print("="*50)
+            print(f"{'Columna':<30} | {'Nulos Antes':<12} | {'Nulos Después':<12}")
+            print("-"*60)
+            
+            for col in numeric_cols:
+                print(f"{col:<30} | {nulls_before[col]:<12} | {nulls_after[col]:<12}")
+            
+            print("-"*60)
+            print(f"Total de registros imputados con éxito: {total_nulls_before - nulls_after.sum()}")
+            print("="*50 + "\n")
+
             print("[SUCCESS] MICE imputation completed successfully.")
             return data
             
         except Exception as e:
-            print(f"[CRITICAL] Error during MICE imputation: {e}")
+            print(f"[CRITICAL] Error durante la imputación MICE: {e}")
             return df
 
     def clusteringkmeans(self):
